@@ -26,21 +26,25 @@ under the same harness; a rule the holder cannot meet is a rule stricter than th
   (`tools/cpu-level.py`). The holder uses 80186 instructions (`pusha`, `imul r,r,imm`, shifts by immediate).
   Anything above 80186 is reported as a separate, clearly labelled number.
 
-## 3. What "complete" means: seven features, each tested
+## 3. What "complete" means: six features, each tested
 
 | # | Feature | Test (in `tests/`) |
 |---|---------|--------------------|
 | 1 | All seven tetrominoes (I, O, T, S, Z, J, L) appear | spawn many pieces; all seven shapes seen |
 | 2 | Gravity: a piece falls by itself | no input, piece row increases |
-| 3 | Move left/right, blocked by walls and by settled blocks | keys against wall and against a stack |
+| 3 | Move left/right, blocked by the walls and by settled blocks | keys against wall and against a stack |
 | 4 | Rotation, blocked when it would overlap | rotate near wall/stack; four rotations return the same shape |
-| 5 | Landing: a piece that cannot fall settles into the board | piece stops on the floor and on blocks |
-| 6 | Line clearing: 1 to 4 full rows are removed and the rows above drop | build rows by script; board after == expected |
-| 7 | Game over: a stack that reaches the spawn point ends the game (restart or stop), without crashing or hanging the machine | fill the board; the program reaches a defined end state |
-| 8 | Pause | pause key freezes gravity until pressed again |
+| 5 | Line clearing: 1 to 4 full rows are removed and the rows above drop | bot plays many pieces; each landing compared with a reference model |
+| 6 | Game over: a stack that reaches the spawn point ends play (stop, freeze or restart) without corrupting the display or running into a CPU fault | fill the board; the program reaches a defined end state |
 
-*(Rows 1–7 and 8 are the holder's own feature list as the Tetris4K archive records it. Pause and game over will be
-re-read against what the holder's binary really does before this table is frozen.)*
+Landing (a piece that cannot fall settles into the board) is part of 2 and 5: no landing, no stack.
+
+**Why six and not the archive's seven.** The Tetris4K archive lists tinytris with seven features, one of them
+"Pause: pause emulation" (key "F16", "any key: unpause"). That is the emulator being paused, not the program. The
+holder's `tinytris.com` has no key that stops its gravity (`tests/` sweeps every key and shows it), so the program's
+own features are the six above. A program that adds a real pause is stronger than the holder, never weaker, and
+would be reported separately. The archive also lists tinytris at 251 B (an older build); the holder's repository
+ships a 247 B `tinytris.com`, which is the number measured here.
 
 ## 4. What is NOT required (same as the holder)
 

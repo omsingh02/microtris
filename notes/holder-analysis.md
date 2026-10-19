@@ -34,8 +34,13 @@ harness before they are relied on.
 `DS=CS=SS`, writable stack, text mode already on, and `SI=0x100` (`cmp [si],0x1fff` reads the program's own first
 bytes on the first pass) (?).
 
-## Open questions to settle under the harness
+## Behaviour confirmed under `tools/dosvm.py` (2026-10-20)
 
-- Where exactly is pause? (I see no blocking key wait; `int 16h` is called with AH taken from DI.)
-- What does game over do (hang, restart, overwrite)?
-- Is the left/right mapping j/l, rotation k?
+- Keys: `j` left, `l` right, `k` rotate; every other key is read and ignored. (The archive says `k` is counter-clockwise.)
+- A frame is one `INT 16h AH=1` peek followed, only if a key is there, by an `AH=0` read (the code passes AX=DI, which is 0).
+  Gravity is every 8th frame; one frame is about 44,000 instructions (almost all of it redrawing the screen).
+- **Pause: none.** The archive's "pause" is "pause emulation" (an emulator hotkey), not code.
+- **Game over: freeze.** When the stack reaches the top, the spawn/land loop (`10f..169`) spins forever without
+  calling the keyboard, so keys do nothing and the machine must be reset. The last board stays on screen.
+- Screen: the board is drawn from column 0, two characters per cell, attribute `0x44` for filled and `0x77` for empty;
+  the left wall (bit 12) is one cell wide and the right wall (bits 1-0) two cells wide, so the well is not centred.
