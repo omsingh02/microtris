@@ -27,17 +27,15 @@ next_piece:                         ; ---- remove full rows (si = row pointer; f
         pop es
 scan:   cmp word [si], 0x1fff
         ja pick                     ; reached the floor (0xFFFF > 0x1FFF): done
-        push si
-        jne not_full
+        jne advance
         mov di, si                  ; a full row: copy every row above it down by one (backwards)
         std
         lodsw
 .shift: movsw
         cmp si, bx
-        jne .shift
-not_full:
-        pop si
+        jne .shift                  ; (si is back at the top row now, so the scan carries on from there)
         cld
+advance:
         lodsw                       ; next row
         jmp scan
 
@@ -57,7 +55,7 @@ frame:  xor di, di
         je .fits
         dec si                      ; (a collision: step back up a row)
         dec si
-.fits:  mov al, 0x09                ; opcode 'or [si],ax': stamp the piece into the board
+.fits:  mov al, 0x31                ; opcode 'xor [si],ax': stamp the piece into the board (the cells are empty: xor = or)
         call set_op
         push 0xb800
         pop es
@@ -80,8 +78,7 @@ frame:  xor di, di
         popa
         popf
         jne next_piece              ; the piece collided: it has landed. next piece (and full rows go)
-        mov al, 0x31                ; opcode 'xor [si],ax': take the piece out of the board again
-        call set_op
+        call set_op                 ; (al is still 0x31) xor the piece out of the board again
         add ch, 0x20                ; gravity: every 8th pass the piece moves down a row
         jae .nodrop
         lodsw
@@ -94,14 +91,11 @@ frame:  xor di, di
         push dx
         mov ax, di
         int 0x16
-        sub al, 'j'
-        je move_left
-        dec al
-        je rotate
-        dec al
-        jne undo
-        dec cx
-        jmp move
+        sub al, 'j'                 ; j, k, l -> 0, 1, 2
+        cmp al, 3
+        jae undo                    ; any other key: nothing happens
+        dec al                      ; j, k, l -> -1, 0, +1
+        jne sideways
 rotate:                             ; dx = mask -> dx = mask turned 90 degrees (di is 0 now, and 0 again at the end)
         mov bp, 4                   ; four columns
 .col:   mov ax, dx
@@ -115,9 +109,6 @@ rotate:                             ; dx = mask -> dx = mask turned 90 degrees (
         jnz .col
         mov dx, di
         xor di, di
-        dec cx                      ; (rotation falls through dec+inc: no sideways move)
-move_left:
-        inc cx
 move:   call test_piece
         jne undo
         pop ax                      ; it fits: throw away the saved cx/dx
@@ -126,6 +117,9 @@ move:   call test_piece
 undo:   pop dx
         pop cx
         ret
+sideways:
+        sub cl, al                  ; j (-1): one column left (shift up), l (+1): one column right
+        jmp move
 
 test_piece:
         mov al, 0x23                ; opcode 'and ax,[si]'
