@@ -47,7 +47,7 @@ class Exited(Exception):
 
 class DosVM:
     POLL_COST = 100                     # instructions charged when a run is cut short at a poll (see run())
-    CHUNK = 1000                        # instructions between clock updates
+    CHUNK = 5000                        # instructions between clock updates
     INSNS_PER_TICK = 5000               # nominal: 18.2 Hz tick, ~90 K instructions/s machine. Tunable by tests.
 
     def __init__(self, com, seg=0x1000, seed=1, profile='dos', insns_per_tick=None):
@@ -70,7 +70,7 @@ class DosVM:
         self._parked = False            # stopped in front of an INT that has not been served yet
         self._resume_poll = False       # the next INT 16h is the one we parked at: serve it, do not stop again
         self._pit = seed & 0xFFFF or 1  # xorshift state for port 0x40
-        self.pit_script = None          # optional iterator of bytes returned by IN 0x40 (tests use this to pick pieces)
+        self.pit_fn = None              # optional callable returning the byte IN 0x40 gives (tests use this to pick pieces)
         self._tick_base = 0
 
         uc = self.uc = Uc(UC_ARCH_X86, UC_MODE_16)
@@ -178,11 +178,8 @@ class DosVM:
 
     # ---- ports -----------------------------------------------------------------------------------------------
     def _next_pit(self):
-        if self.pit_script is not None:
-            try:
-                return next(self.pit_script) & 0xFF
-            except StopIteration:
-                self.pit_script = None
+        if self.pit_fn is not None:
+            return self.pit_fn() & 0xFF
         x = self._pit
         x ^= (x << 7) & 0xFFFF
         x ^= x >> 9
