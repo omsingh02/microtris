@@ -16,6 +16,15 @@ def _tinytris_well(vm):
     return [[scr[r][2 * (1 + c)][1] == 0x44 for c in range(10)] for r in range(24)]
 
 
+def _microtris_well(vm):
+    # Same 13 cells of two characters. A cell is empty when the background has the red bit (attribute bit 6, which the
+    # program takes from ZF), a block when it has not. Cell 0 is the left wall, cells 1..10 the well.
+    scr = vm.screen()
+    return [[not scr[r][2 * (1 + c)][1] & 0x40 for c in range(10)] for r in range(24)]
+
+
 TINYTRIS = Adapter('tinytris', _tinytris_well, left='j', right='l', rotate='k', rows=24)
 
-ADAPTERS = {'tinytris': TINYTRIS}
+MICROTRIS = Adapter('microtris', _microtris_well, left='j', right='l', rotate='k', rows=24)
+
+ADAPTERS = {'tinytris': TINYTRIS, 'microtris': MICROTRIS}

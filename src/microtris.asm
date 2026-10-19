@@ -60,13 +60,12 @@ frame:  xor di, di
         push 0xb800
         pop es
         pusha                       ; ---- draw the whole board: 25 rows x 13 cells x 2 columns
+        xor al, al                  ; a blank character: only the background colour shows
         mov cl, BOARD_ROWS
 .row:   mov dx, 0x1000
 .cell:  test [bx], dx
-        mov ah, 0x44                ; red = block
-        jne .put
-        mov ah, 0x77                ; grey = empty
-.put:   stosw
+        lahf                        ; the attribute comes from the flags: ZF (bit 6) = empty = red background, else black
+        stosw
         stosw
         shr dx, 1
         jne .cell

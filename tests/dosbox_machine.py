@@ -108,12 +108,8 @@ class DosboxMachine:
             row = []
             for c in range(80):
                 px = self.image.getpixel((c * w + 1, r * h + 1))
-                if px[0] > 140 and px[1] < 60 and px[2] < 60:
-                    attr = 0x44                                  # DOSBox's red (170,0,0)
-                elif min(px) > 140:
-                    attr = 0x77                                  # grey (170,170,170)
-                else:
-                    attr = 0
+                bg = (px[0] > 140) << 6 | (px[1] > 140) << 5 | (px[2] > 140) << 4   # the three colour bits, as in an attribute
+                attr = bg | bg >> 4                                                  # (solid cells: foreground = background)
                 row.append((0, attr))
             rows.append(row)
         return rows
