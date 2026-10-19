@@ -43,9 +43,9 @@ class Game:
     """A running program plus a tracker that follows the falling piece and the settled stack on screen, and checks
     every landing against the reference rules. Any disagreement raises Fail with both boards."""
 
-    def __init__(self, com, adapter, seed=1, byte=None, profile='dos', seg=0x1000):
+    def __init__(self, com, adapter, seed=1, byte=None, profile='dos', seg=0x1000, machine=None):
         self.ad = adapter
-        self.vm = DosVM(com, seed=seed, profile=profile, seg=seg)
+        self.vm = machine or DosVM(com, seed=seed, profile=profile, seg=seg)   # any object with press(), frame(), screen()
         self.byte = byte                                    # None: the machine's own pseudo-random stream
         if byte is not None:
             self.vm.pit_fn = lambda: self.byte
