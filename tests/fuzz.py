@@ -1,0 +1,118 @@
+#!/usr/bin/python3
+"""fuzz.py - random key presses against a running program, every frame judged from the screen.
+
+    python3 -I tests/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N] [--profile dos|zeroed] [--seg 0xNNNN]
+
+Extra evidence, not one of the six features: the six checks are scripted, this one throws j/k/l (and a few other keys)
+at the program in random order, on random stacks, and after every single frame requires that
+  * the screen is the settled stack plus exactly one whole tetromino (a piece that vanishes at a wall, loses a cell or
+    overlaps a block fails here),
+  * a sideways key moves the piece one column, or it does not move and then the move really was blocked (wall or block),
+  * rotation turns the piece the same way every time (or leaves it as it was),
+  * any other key changes nothing,
+  * a landing agrees with the reference rules (the tracker in features.py does this).
+A run ends when the stack gets high; the next run starts the program again with another random stream."""
+import argparse
+import os
+import random
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
+sys.path.insert(0, HERE)
+from features import Fail, Game, height, picture                             # noqa: E402
+from tetris_model import W, norm, rotate_cw                                  # noqa: E402
+from adapters import ADAPTERS                                                # noqa: E402
+
+OTHER_KEYS = ['x', 'a', 'space', 'J', 'm', 'left', 'right', 'up', 'down', 'enter', 'esc', '1']
+
+
+def shifted(cells, dr, dc):
+    return {(r + dr, c + dc) for r, c in cells}
+
+
+def blocked(cells, settled, rows):
+    return any(not (0 <= c < W and r < rows) or (r, c) in settled for r, c in cells)
+
+
+def one_run(com, ad, seed, steps, profile, seg, spin):
+    rng = random.Random(seed)
+    g = Game(com, ad, seed=seed, profile=profile, seg=seg)
+    counts = {'left': 0, 'right': 0, 'left blocked': 0, 'right blocked': 0, 'rotate': 0, 'rotate blocked': 0,
+              'other': 0, 'landings': 0}
+    for _ in range(steps):
+        key = rng.choices(['left', 'right', 'rotate', None, 'other'], weights=[4, 4, 3, 3, 1])[0]
+        press = {'left': ad.left, 'right': ad.right, 'rotate': ad.rotate, None: None, 'other': rng.choice(OTHER_KEYS)}[key]
+        prev, settled = g.piece, g.settled
+        ev = g.step(*([press] if press else []))
+        if isinstance(ev, tuple):
+            counts['landings'] += 1
+            if height(g.settled, ad.rows) >= 17:
+                break
+            continue
+        new = g.piece
+        for dr in (0, 1):                                    # gravity may have dropped it one row in the same frame
+            if key in ('left', 'right'):
+                dc = 1 if key == 'right' else -1
+                if new == shifted(prev, dr, dc):
+                    counts[key] += 1
+                    break
+                if new == shifted(prev, dr, 0):
+                    if not blocked(shifted(prev, dr, dc), settled, ad.rows):
+                        raise Fail(f'seed {seed}: {key} was refused with room to move\n{picture(settled | prev, ad.rows, prev)}')
+                    counts[key + ' blocked'] += 1
+                    break
+            elif key == 'rotate':
+                if new == shifted(prev, dr, 0) or norm(new) == norm(prev):
+                    counts['rotate blocked'] += 1
+                    break
+                turns = {t for t in ('cw', 'ccw') if norm(new) == (rotate_cw(norm(prev)) if t == 'cw' else
+                                                                    rotate_cw(rotate_cw(rotate_cw(norm(prev)))))}
+                if turns:
+                    spin &= turns
+                    if not spin:
+                        raise Fail(f'seed {seed}: rotation changed direction\n{picture(settled | prev, ad.rows, prev)}')
+                    counts['rotate'] += 1
+                    break
+            else:
+                if new == shifted(prev, dr, 0):
+                    counts['other'] += key == 'other'
+                    break
+        else:
+            raise Fail(f'seed {seed}: after {key!r} ({press!r}) the piece went from\n'
+                       f'{picture(settled | prev, ad.rows, prev)}\nto\n{picture(g.settled | new, ad.rows, new)}')
+    return counts, spin
+
+
+def main(argv):
+    p = argparse.ArgumentParser()
+    p.add_argument('com')
+    p.add_argument('adapter', choices=sorted(ADAPTERS))
+    p.add_argument('--runs', type=int, default=8)
+    p.add_argument('--steps', type=int, default=600)
+    p.add_argument('--seed', type=int, default=1)
+    p.add_argument('--profile', default='dos', choices=['dos', 'zeroed'])
+    p.add_argument('--seg', type=lambda s: int(s, 0), default=0x1000)
+    a = p.parse_args(argv)
+    with open(a.com, 'rb') as f:
+        com = f.read()
+    size = len(com)
+    ad = ADAPTERS[a.adapter]
+    t0 = time.time()
+    total, spin = {}, {'cw', 'ccw'}
+    try:
+        for i in range(a.runs):
+            counts, spin = one_run(com, ad, a.seed + i, a.steps, a.profile, a.seg, spin)
+            for k, v in counts.items():
+                total[k] = total.get(k, 0) + v
+    except Fail as e:
+        print(f'{a.com}: FUZZ FAILED ({a.profile} registers, segment {a.seg:04X})\n{e}')
+        return 1
+    print(f'{a.com}: {size} bytes, {a.runs} runs x up to {a.steps} frames, {a.profile} registers, segment {a.seg:04X}: '
+          f'every frame was one whole piece on the stack; {total}; rotation direction {sorted(spin)}  [{time.time() - t0:.0f}s]')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

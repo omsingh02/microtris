@@ -15,7 +15,7 @@ BOARD_ROWS equ 0x18
 
 start:
         mov bx, sp                  ; bx = board base 0xFFFE
-        mov ax, 0x1003              ; an empty row: walls only
+        mov ax, 0x400f              ; an empty row: walls only (bit 14 on the left, bits 3..0 on the right)
         mov cx, BOARD_ROWS
         mov di, sp
         repne stosw                 ; 24 rows (the first ones wrap round into the PSP); cx = 0 afterwards
@@ -25,8 +25,8 @@ start:
 next_piece:                         ; ---- remove full rows (si = row pointer; first pass reads from the program itself)
         push ds
         pop es
-scan:   cmp word [si], 0x1fff
-        ja pick                     ; reached the floor (0xFFFF > 0x1FFF): done
+scan:   cmp word [si], 0x7fff
+        ja pick                     ; reached the floor (0xFFFF > 0x7FFF): done
         jne advance
         mov di, si                  ; a full row: copy every row above it down by one (backwards)
         std
@@ -46,7 +46,7 @@ pick:   in al, 0x40                 ; random piece from the timer: 0..6
         mov al, [bp + pieces]       ; one byte = rows 0 and 1 of the piece's 4x4 box
         cbw                         ; (no piece byte has bit 7 set)
         xchg dx, ax                 ; dx = the 4x4 mask
-        mov cl, 4                   ; column shift: start in the middle
+        mov cl, 7                   ; column shift: start in the middle
         mov si, bx                  ; si = the piece's top row = the top row of the board
 
 frame:  xor di, di
@@ -59,17 +59,17 @@ frame:  xor di, di
         call set_op
         push 0xb800
         pop es
-        pusha                       ; ---- draw the whole board: 25 rows x 13 cells x 2 columns
+        pusha                       ; ---- draw the whole board: 25 rows x 15 cells x 2 columns
         xor al, al                  ; a blank character: only the background colour shows
         mov cl, BOARD_ROWS
-.row:   mov dx, 0x1000
+.row:   mov dx, 0x4000
 .cell:  test [bx], dx
         lahf                        ; the attribute comes from the flags: ZF (bit 6) = empty = red background, else black
         stosw
         stosw
         shr dx, 1
         jne .cell
-        add di, 0x6c                ; down a screen row (160 - 52 bytes)
+        add di, 0x64                ; down a screen row (160 - 60 bytes)
         inc bx
         inc bx
         dec cx
