@@ -1,18 +1,18 @@
 #!/usr/bin/python3
 """reach.py - every position a piece can ever get to in microtris, on an empty well, checked for lost cells.
 
-    python3 -I tools/reach.py build/microtris.com
+    python3 -I test/reach.py build/microtris.com
 
 Why: the program tests a piece by shifting its 4x4 mask left by CL and ANDing it with the row words. A shift count
 outside 0..15 throws every cell away, and a lost cell can never collide, so a piece pushed one column too far could
-vanish (the holder's tinytris does this with a vertical I at the right wall; tests/fuzz.py finds it). The well is laid
+vanish (the holder's tinytris does this with a vertical I at the right wall; test/fuzz.py finds it). The well is laid
 out so that cannot happen. This script proves it for microtris: breadth-first search over (mask, CL, row) with the
 program's own rules (move = CL +/- 1 as a byte, rotate = the column gather, fall = one row), and at every reachable
 state the 4 cells must all be there and all inside the well. An empty well is enough: settled blocks only take
 positions away.
 
 It models the code, it does not run it: the bit layout, the rotation and the piece table are read from the assembled
-file (the table) and from src/microtris.asm's constants (the layout), and tests/fuzz.py runs the binary itself."""
+file (the table) and from src/microtris.asm's constants (the layout), and test/fuzz.py runs the binary itself."""
 
 import sys
 

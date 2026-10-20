@@ -1,79 +1,65 @@
-# make        build build/microtris.com and print its size
-# make verify build, fetch tinytris.com (sha256 checked), run the six feature checks on both on the VM
-# make holder-bug  show what the holder's program does wrong (random keys; stores outside the text page)
-# make -j4 -Otarget robust   the same checks with zeroed registers, other load segments and seeds
-# make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
-# make play   play it in DOSBox (j left, l right, k rotate)
-# make lint   style, dead code, security and spelling checks on the Python and the docs (ruff pylint vulture bandit
-#             codespell typos) and the licence headers (reuse)
-NASM ?= nasm
-PY   ?= python3 -I
-COM    = build/microtris.com
+# make          build build/microtris.com and print its size
+# make quick    the checks on microtris only, a few minutes (use while editing)
+# make test     quick, plus tinytris (fetched, sha256 checked) through the same checks
+# make matrix   the checks again with other registers at entry, load segments and seeds
+# make dosbox   cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
+# make holder-bug  the two things wrong with tinytris
+# make speed    instructions per row of fall, both programs
+# make play     play it in DOSBox: j left, l right, k rotate
+.POSIX:
+
+NASM = nasm
+PY = python3 -I
+COM = build/microtris.com
 HOLDER = build/tinytris.com
+HOLDER_URL = https://raw.githubusercontent.com/pellsson/tinytris/master/tinytris.com
 HOLDER_SHA256 = 0cbd70beafbd043a2d47bd7391f0e84f23a9e8ec36e7b51d5cc85a070cda4bfa
 
 all: $(COM)
-	@printf '%s: %s bytes\n' $(COM) "$$(stat -c %s $(COM))"
+	@printf '%s: %s bytes\n' $(COM) "$$(wc -c < $(COM) | tr -d ' ')"
 
-$(COM): src/microtris.asm
+$(COM): microtris.asm
 	@mkdir -p build
-	$(NASM) -f bin -l build/microtris.lst src/microtris.asm -o $(COM)
+	$(NASM) -f bin -l build/microtris.lst microtris.asm -o $(COM)
 
-# pellsson's 247-byte tinytris.com. It is not part of this repo (the upstream repo has no licence): fetched once,
-# checked against its sha256, and only ever run inside the emulator.
-HOLDER_URL = https://raw.githubusercontent.com/pellsson/tinytris/master/tinytris.com
+# tinytris has no licence, so it is not kept here: fetched, checked against its sha256, only ever run in the VM
 $(HOLDER):
 	@mkdir -p build
 	curl -fsSL -o $(HOLDER) $(HOLDER_URL)
 	@echo "$(HOLDER_SHA256)  $(HOLDER)" | sha256sum -c --quiet - || { rm -f $(HOLDER); echo 'tinytris.com: sha256 does not match'; exit 1; }
 
-verify: all $(HOLDER)
-	@echo "$(HOLDER_SHA256)  $(HOLDER)" | sha256sum -c --quiet - && printf '%s: %s bytes, sha256 matches the holder\n' $(HOLDER) "$$(stat -c %s $(HOLDER))"
-	$(PY) tests/features.py $(HOLDER) tinytris
-	$(PY) tests/features.py $(COM) microtris
-	$(PY) tools/cpu_level.py $(HOLDER) --data 14
-	$(PY) tools/cpu_level.py $(COM)
-	$(PY) tools/reach.py $(COM)
-	$(PY) tests/fuzz.py $(COM) microtris
-	$(PY) tests/footprint.py $(COM) microtris
+quick: all
+	$(PY) test/features.py $(COM) microtris
+	$(PY) test/cpu_level.py $(COM)
+	$(PY) test/reach.py $(COM)
+	$(PY) test/fuzz.py $(COM) microtris
+	$(PY) test/footprint.py $(COM) microtris
 
-# not part of verify: random keys make the holder lose a vertical I at the right wall, and its draw loop writes over the
-# whole 64 KB of the B800 segment every frame (exit status 1 is the expected result for both)
-holder-bug: $(HOLDER)
-	-$(PY) tests/fuzz.py $(HOLDER) tinytris --runs 40 --steps 600 --seed 100 2>&1 | head -12
-	-$(PY) tests/footprint.py $(HOLDER) tinytris
+test: quick $(HOLDER)
+	@echo "$(HOLDER_SHA256)  $(HOLDER)" | sha256sum -c --quiet - && echo '$(HOLDER): sha256 matches'
+	$(PY) test/features.py $(HOLDER) tinytris
+	$(PY) test/cpu_level.py $(HOLDER) --data 14
 
-# the same program under other entry conditions: profile (registers at entry), load segment, random seed.
-# usage: make -j4 -Otarget robust
-ROBUST = zeroed-1000-11 dos-0900-12 dos-5555-13 zeroed-A000-14
-robust: $(addprefix robust-,$(ROBUST))
-
-robust-%: all
-	@p=$(word 1,$(subst -, ,$*)); s=0x$(word 2,$(subst -, ,$*)); n=$(word 3,$(subst -, ,$*)); \
-	echo "== registers at entry: $$p, load segment $$s, seed $$n" && \
-	$(PY) tests/features.py $(COM) microtris --profile $$p --seg $$s --seed $$n && \
-	$(PY) tests/fuzz.py $(COM) microtris --profile $$p --seg $$s --seed $$n && \
-	$(PY) tests/footprint.py $(COM) microtris --profile $$p --seg $$s
+matrix: all
+	sh test/matrix.sh $(COM)
 
 dosbox: all
-	$(PY) tests/dosbox_check.py $(COM) microtris
+	$(PY) test/dosbox_check.py $(COM) microtris
 
-# DOS file names are 8 characters at most, so the game is played from a copy called tetris.com
+# exit status 1 is the expected result of both
+holder-bug: $(HOLDER)
+	-$(PY) test/fuzz.py $(HOLDER) tinytris --runs 40 --steps 600 --seed 100 2>&1 | head -12
+	-$(PY) test/footprint.py $(HOLDER) tinytris
+
+speed: all $(HOLDER)
+	$(PY) test/speed.py $(HOLDER) tinytris
+	$(PY) test/speed.py $(COM) microtris
+
+# DOS file names stop at 8 characters, so it is played from a copy called tetris.com
 play: all
 	@mkdir -p build/play
 	cp $(COM) build/play/tetris.com
-	dosbox -conf tools/play.conf
-
-lint:
-	ruff check tests tools
-	ruff format --check tests tools
-	pylint --enable=all --disable=C,R,I,F,W0613 tests tools
-	pylint --disable=all --enable=duplicate-code --min-similarity-lines=6 tests tools
-	vulture tests tools
-	bandit -q -r tests tools --ini .bandit
-	reuse lint
-	codespell README.md RULES.md Makefile notes src tests tools ruff.toml
-	typos README.md RULES.md Makefile notes src tests tools ruff.toml
+	dosbox -c 'mount c build/play' -c 'c:' -c 'config -set "cpu cycles=fixed 400"' -c 'cls' -c 'tetris.com'
 
 clean:
 	rm -rf build

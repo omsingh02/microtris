@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 """features.py - does this .COM really play Tetris? Six checks, from outside: only the screen and the keyboard.
 
-    python3 -I tests/features.py <program.com> <adapter> [--pieces N] [--seed N]
+    python3 -I test/features.py <program.com> <adapter> [--pieces N] [--seed N]
 
 Everything is deterministic: same program + same arguments = same verdict, on any machine. See RULES.md, section 3.
 How it works: a tracker follows the falling piece and the settled stack on the screen frame by frame. Whenever a
-piece lands, the board is compared with what the reference rules (tools/tetris_model.py) say it must be, including
+piece lands, the board is compared with what the reference rules (test/tetris_model.py) say it must be, including
 removal of full rows. A bot plays pieces to exercise this; scripted scenarios hit the 1-, 2-, 3- and 4-row clears."""
 
 import argparse
@@ -15,7 +15,6 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 sys.path.insert(0, HERE)
 from adapters import ADAPTERS  # noqa: E402
 from dosvm import DosVM  # noqa: E402

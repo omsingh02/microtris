@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """fuzz.py - random key presses against a running program, every frame judged from the screen.
 
-    python3 -I tests/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N]
+    python3 -I test/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N]
                              [--profile dos|zeroed] [--seg 0xNNNN]
 
 Extra evidence, not one of the six features: the six checks are scripted, this one throws j/k/l (and a few other keys)
@@ -21,7 +21,6 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 sys.path.insert(0, HERE)
 from adapters import ADAPTERS  # noqa: E402
 from features import Fail, Game, height, picture  # noqa: E402

@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """dosbox_check.py - play the .COM in the real DOSBox and hold it to the same rules as the VM tests.
 
-    python3 -I tests/dosbox_check.py <program.com> <adapter> [--pieces N] [--cycles N] [--slow-cycles N]
+    python3 -I test/dosbox_check.py <program.com> <adapter> [--pieces N] [--cycles N] [--slow-cycles N]
 
 A cross-check by a different implementation of the PC. Checks: a piece appears; gravity; it reaches both walls; it
 rotates (4 presses = back to the start); then a bot plays N pieces and every landing is compared with the reference
@@ -15,7 +15,6 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 from adapters import ADAPTERS  # noqa: E402
 from dosbox_machine import DosboxMachine  # noqa: E402
 from features import BASE, Fail, Game, W, bot_choice, norm, orientations, picture, place  # noqa: E402

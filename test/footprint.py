@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """footprint.py - where does the program write? Every store the CPU makes outside the program's own segment is checked.
 
-    python3 -I tests/footprint.py <program.com> <adapter> [--seg 0xNNNN] [--profile dos|zeroed] [--frames N]
+    python3 -I test/footprint.py <program.com> <adapter> [--seg 0xNNNN] [--profile dos|zeroed] [--frames N]
 
 Extra evidence, not one of the six features. The VM maps all 1 MB as RAM, so a program that scribbles over memory it
 does not own would still pass the six checks; this one would not. The program is played with random keys and idle
@@ -18,7 +18,6 @@ import random
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 sys.path.insert(0, HERE)
 from adapters import ADAPTERS  # noqa: E402
 from dosvm import DosVM  # noqa: E402
