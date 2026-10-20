@@ -14,10 +14,9 @@
 BOARD_ROWS equ 0x18
 
 start:
-        xor bx, bx                  ; bx = board base 0: the board is the first 50 bytes of the PSP (the word above it, 0xFFFE, is free)
+        xor di, di                  ; the board starts at offset 0: the first 50 bytes of the PSP (the word above it, 0xFFFE, is free)
         mov ax, 0x400f              ; an empty row: walls only (bit 14 on the left, bits 3..0 on the right)
         mov cx, BOARD_ROWS
-        mov di, bx
         repne stosw                 ; 24 rows; cx = 0 afterwards
         dec cx                      ; cx = 0xFFFF
         or [di], cx                 ; the row after the last one = 0xFFFF: the floor
@@ -26,8 +25,8 @@ start:
         pop es                      ; es = the screen from here on (the board is only touched through ds)
 
 next_piece:
-        cmp si, bx
-        jl next_piece               ; game over: the piece landed on the row above the board (si = -2): stay here, board on screen
+        test si, si
+        js next_piece               ; game over: the piece landed on the row above the board (si = -2): stay here, board on screen
         ; ---- remove full rows (si = row pointer; first pass reads from the program itself)
 scan:   cmp word [si], 0x7fff
         ja pick                     ; reached the floor (0xFFFF > 0x7FFF): done
@@ -36,8 +35,7 @@ scan:   cmp word [si], 0x7fff
         mov [si], ax
         dec si
         dec si
-        cmp si, bx
-        jne .shift                  ; (si is back at the top row now, so the scan carries on from there)
+        jne .shift                  ; (si is back at the top row, 0, now, so the scan carries on from there)
 advance:
         lodsw                       ; next row
         jmp scan
@@ -50,7 +48,7 @@ pick:   in al, 0x40                 ; random piece from the timer: 0..6
         cbw                         ; (no piece byte has bit 7 set)
         xchg dx, ax                 ; dx = the 4x4 mask
         mov cl, 7                   ; column shift: start in the middle
-        mov si, bx                  ; si = the piece's top row = the top row of the board
+        xor si, si                  ; si = the piece's top row = the top row of the board
 
 frame:  xor di, di
         call test_piece             ; ZF=1 if the piece fits at si, cl
@@ -61,6 +59,7 @@ frame:  xor di, di
 .fits:  mov al, 0x31                ; opcode 'xor [si],ax': stamp the piece into the board (the cells are empty: xor = or)
         call set_op
         pusha                       ; ---- draw the whole board: 25 rows x 15 cells x 2 columns
+        xor bx, bx                  ; (bx walks down the board)
         xor al, al                  ; a blank character: only the background colour shows
         mov cl, BOARD_ROWS
 .row:   mov dx, 0x4000
