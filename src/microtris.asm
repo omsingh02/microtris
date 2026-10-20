@@ -1,14 +1,15 @@
-; microtris.asm - Tetris in a DOS .COM file, smaller than the 247-byte tinytris.
+; microtris.asm - Tetris in a DOS .COM file, 209 bytes. The smallest complete one I know of is pellsson's tinytris, 247.
 ;
-; Built on the architecture of pellsson's tinytris (https://github.com/pellsson/tinytris): the board lives in the
-; stack segment as one word per row, a piece is a 4x4 bit mask, one routine tests/stamps/erases by patching its own
-; opcode, and the screen is redrawn from the board. See reference/tinytris-reconstructed.asm for the original,
-; byte for byte. What is different here:
-;   * rotation is a column gather done with one multiply per column (27 bytes instead of 46)
-;   * the piece table holds each piece as ONE byte (two rows of the 4x4 box), not a word: 7 bytes instead of 14
+; The design is tinytris's (https://github.com/pellsson/tinytris): one word per board row, a piece is a 4x4 bit mask,
+; one routine tests, stamps and erases by patching its own opcode, the answer comes back in ZF, a rejected move is
+; undone from the stack, and the whole board is redrawn every pass. What is different here:
+;   * rotation gathers one column of the mask per multiply (27 bytes instead of 46)
+;   * a piece is one byte in the table (two rows of its box), so the table is 7 bytes, not 14
+;   * the colour of a cell comes straight from the flags (lahf), the board starts at offset 0, and the well sits
+;     two bits higher in the row word so that a shifted-out piece can never look free
 ;
-; Entry state relied on (same as the holder's, see RULES.md): CS=DS=ES=SS, SP=0xFFFE, SI=0x100, DI=0, text mode,
-; BIOS keyboard (INT 16h) and the timer counter at port 0x40 for the random piece.
+; Relied on at entry: CS=DS=ES=SS, SP=0xFFFE, colour text mode, BIOS INT 16h, the timer counter at port 0x40.
+; Not relied on: any other register (see RULES.md).
         bits 16
         org 0x100
 BOARD_ROWS equ 0x18

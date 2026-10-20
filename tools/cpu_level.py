@@ -1,7 +1,7 @@
 #!/usr/bin/python3
-"""cpu-level.py - the oldest x86 a .COM program can run on, read from its bytes and from a run.
+"""cpu_level.py - the oldest x86 a .COM program can run on, read from its bytes and from a run.
 
-    python3 -I tools/cpu-level.py <program.com> [--data N] [--max 186]
+    python3 -I tools/cpu_level.py <program.com> [--data N] [--max 186]
 
 Two passes, because a static listing alone can be fooled by self-modifying code and by data inside the code:
   1. static: disassemble from 0x100 to the end of the code (the last N bytes of the file are data, default 7: the piece

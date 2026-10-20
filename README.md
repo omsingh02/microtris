@@ -18,9 +18,10 @@ $ make
 build/microtris.com: 209 bytes
 ```
 
-Keys: `j` left, `l` right, `k` rotate. Nothing else does anything. Run it in DOSBox with a fixed cycle count
-(`cycles=fixed 400` is comfortable): the fall speed is the CPU's speed, as in the original, because there is no timer in it.
-When the stack reaches the top the program freezes with the final board on screen; reset the emulator.
+Keys: `j` left, `l` right, `k` rotate. Nothing else does anything. The fall speed is the CPU's speed, as in the original,
+because there is no timer in it; in DOSBox use a fixed cycle count (the tests use `cycles=fixed 400`, which is about a row
+a second; I have not play-tested it for feel). When the stack reaches the top the program freezes with the final board
+on screen; reset the emulator.
 
 ## How it got smaller
 
@@ -32,8 +33,8 @@ and erases by patching its own opcode, a collision result carried in the zero fl
 - **One byte per piece.** Every tetromino fits in two rows of its box, so the table is 7 bytes read with `xlat`, not 14.
 - **The colour comes from the flags.** After `test [bx],dx`, `lahf` already holds an attribute byte whose bit 6 is "was
   empty". Red well, black blocks and walls, no compare, no jump.
-- **The board starts at offset 0** (the first 50 bytes of the PSP), so `si` reaching 0 ends the row-shift loop, `si` going
-  negative is game over, and the floor is the only constant the clear loop needs.
+- **The board starts at offset 0** (the first 50 bytes of the PSP), so the row-shift loop ends when `si` hits 0 and a
+  negative `si` can mean game over.
 - Smaller things: `xor` for both stamp and erase, `jmp` instead of a pushed return address, the shared routine zeroes
   its own accumulator, the board is walked with `lodsw`, a full restart of the scan after a clear.
 
@@ -51,8 +52,8 @@ first is shared by my first layouts and the second was in my own build until the
 2. **The draw loop overruns.** `dec cx / jae` never ends the loop (`dec` leaves the carry flag alone); it ends when the
    screen pointer wraps, about 410 rows later. The holder writes roughly 64 KB over the B800 segment every frame, the
    unused text pages and the video ROM area above them. The emulator I check with maps all of memory as RAM, so the six
-   feature checks cannot see it; `tests/footprint.py` can. That overrun is also what slows the holder down to a playable
-   speed. microtris draws 25 rows and spends the time in the gravity counter instead (315,393 instructions per row of fall,
+   feature checks cannot see it; `tests/footprint.py` can. The overrun is also most of the holder's time per frame, so it
+   sets the holder's fall speed. microtris draws 25 rows and spends the time in the gravity counter instead (315,265 instructions per row of fall,
    the holder: 355,481).
 
 I have not reported either upstream.
@@ -62,7 +63,7 @@ I have not reported either upstream.
 Needs `nasm`, `python-unicorn`, `python-capstone`; `make dosbox` also needs `dosbox`, `xdotool`, `xorg-server-xvfb`, `imagemagick`.
 
 ```
-make verify              # rebuilds tinytris from reference/ (sha256 checked), then on both programs:
+make verify              # fetches tinytris.com (sha256 checked), then on both programs:
                          #   the six feature checks, an 80186 check on the code, and for microtris also
                          #   exhaustive piece-position search, random-key fuzzing, a memory-footprint check
 make -j4 -Otarget robust # the same with zeroed registers, other load segments, other seeds
@@ -83,7 +84,11 @@ no wall clock, a scripted keyboard, a scripted timer port. DOSBox is the cross-c
 - Prior art I know: tinytris (247), 4is256 (256, with scoring and colours), the Hugi Compo #22 winner (363), TetrOS (446).
   If you know of a complete Tetris below 209 bytes, I would like to hear of it.
 
-## Credit
+## Credit and provenance
 
-The architecture is [pellsson](https://github.com/pellsson)'s; `reference/tinytris-reconstructed.asm` is his 247 bytes
-turned back into annotated source, byte-identical to his `tinytris.com`.
+The design is [pellsson](https://github.com/pellsson)'s; 62 of the 112 instruction lines in `src/microtris.asm` are
+his, in the same order (difflib over the instruction text, comments ignored). His `tinytris.com` is not in this repo: the upstream repo has no licence, so `make verify` fetches
+it and checks the sha256.
+
+This project was written with Claude Code (Anthropic's coding assistant). The design choices, the rules and the numbers
+are in the repo, and everything it claims is checked by `make verify`, which is the part that does not depend on who wrote what.

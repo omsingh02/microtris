@@ -1,5 +1,5 @@
 # make        build build/microtris.com and print its size
-# make verify build, rebuild the holder from reference/, run the six feature checks on both on the VM
+# make verify build, fetch tinytris.com (sha256 checked), run the six feature checks on both on the VM
 # make holder-bug  show what the holder's program does wrong (random keys; stores outside the text page)
 # make -j4 -Otarget robust   the same checks with zeroed registers, other load segments and seeds
 # make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
@@ -16,17 +16,20 @@ $(COM): src/microtris.asm
 	@mkdir -p build
 	$(NASM) -f bin -l build/microtris.lst src/microtris.asm -o $(COM)
 
-# the holder's 247 bytes, rebuilt from the annotated source and checked against the hash of pellsson's tinytris.com
-$(HOLDER): reference/tinytris-reconstructed.asm
+# pellsson's 247-byte tinytris.com. It is not part of this repo (the upstream repo has no licence): fetched once,
+# checked against its sha256, and only ever run inside the emulator.
+HOLDER_URL = https://raw.githubusercontent.com/pellsson/tinytris/master/tinytris.com
+$(HOLDER):
 	@mkdir -p build
-	$(NASM) -f bin reference/tinytris-reconstructed.asm -o $(HOLDER)
-	@echo "$(HOLDER_SHA256)  $(HOLDER)" | sha256sum -c --quiet - && printf '%s: %s bytes, sha256 matches the holder\n' $(HOLDER) "$$(stat -c %s $(HOLDER))"
+	curl -fsSL -o $(HOLDER) $(HOLDER_URL)
+	@echo "$(HOLDER_SHA256)  $(HOLDER)" | sha256sum -c --quiet - || { rm -f $(HOLDER); echo 'tinytris.com: sha256 does not match'; exit 1; }
 
 verify: all $(HOLDER)
+	@echo "$(HOLDER_SHA256)  $(HOLDER)" | sha256sum -c --quiet - && printf '%s: %s bytes, sha256 matches the holder\n' $(HOLDER) "$$(stat -c %s $(HOLDER))"
 	$(PY) tests/features.py $(HOLDER) tinytris
 	$(PY) tests/features.py $(COM) microtris
-	$(PY) tools/cpu-level.py $(HOLDER) --data 14
-	$(PY) tools/cpu-level.py $(COM)
+	$(PY) tools/cpu_level.py $(HOLDER) --data 14
+	$(PY) tools/cpu_level.py $(COM)
 	$(PY) tools/reach.py $(COM)
 	$(PY) tests/fuzz.py $(COM) microtris
 	$(PY) tests/footprint.py $(COM) microtris

@@ -64,4 +64,4 @@ harness found them, and because microtris started from the same architecture and
    instructions per frame measured above, and so the holder's gravity speed: it is mostly this wasted drawing.
    `make holder-bug` shows it (`tests/footprint.py`; the VM maps all 1 MB as RAM, which is why the six checks never
    notice). microtris draws 25 rows with `loop` at the same size and compensates in the gravity step
-   (`add ch,2`, every 128th pass), so one row of fall takes 315,393 instructions against the holder's 355,481 (VM count).
+   (`add ch,2`, every 128th pass), so one row of fall takes 315,265 instructions against the holder's 355,481 (VM count).
