@@ -84,8 +84,7 @@ frame:  xor di, di
         mov ah, 1
         int 0x16
         jz frame                    ; no key: next pass
-        push frame                  ; a key: handle it; whatever happens, return to 'frame'
-        push cx
+        push cx                     ; a key: save cx/dx (a move that does not fit is taken back), handle it, back to 'frame'
         push dx
         mov ax, di
         int 0x16
@@ -111,10 +110,10 @@ move:   call test_piece
         jne undo
         pop ax                      ; it fits: throw away the saved cx/dx
         pop ax
-        ret
+        jmp frame
 undo:   pop dx
         pop cx
-        ret
+        jmp frame
 sideways:
         sub cl, al                  ; j (-1): one column left (shift up), l (+1): one column right
         jmp move
