@@ -57,19 +57,18 @@ frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
 .fits:  mov al, 0x31                ; opcode 'xor [si],ax': stamp the piece into the board (the cells are empty: xor = or)
         call set_op
         pusha                       ; ---- draw the whole board: 25 rows x 15 cells x 2 columns
-        xor bx, bx                  ; (bx walks down the board)
-        xor al, al                  ; a blank character: only the background colour shows
+        xor si, si                  ; (si walks down the board)
         mov cx, BOARD_ROWS + 1
-.row:   mov dx, 0x4000
-.cell:  test [bx], dx
+.row:   xor al, al                  ; a blank character: only the background colour shows
+        mov dx, 0x4000
+.cell:  test [si], dx
         lahf                        ; the attribute comes from the flags: ZF (bit 6) = empty = red background, else black
         stosw
         stosw
         shr dx, 1
         jne .cell
         add di, 0x64                ; down a screen row (160 - 60 bytes)
-        inc bx
-        inc bx
+        lodsw                       ; next board row (ax is overwritten, the blank character is made again at .row)
         loop .row
         popa
         popf
