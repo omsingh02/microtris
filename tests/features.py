@@ -357,10 +357,11 @@ def check_line_clearing(ctx):
             f'(rows cleared per landing: {hist})')
 
 
-def check_game_over(ctx):
-    """6. Game over: when the stack reaches the top the program ends play cleanly (freeze, exit or restart); no fault, no garbage."""
+def game_over_once(ctx, cls):
+    """Fill the well with pieces of one kind (cls None: the machine's own random stream) until the program stops playing."""
     vm = DosVM(ctx.com, seg=ctx.seg)
-    vm.pit_fn = lambda: ctx.pieces['O']
+    if cls is not None:
+        vm.pit_fn = lambda: ctx.pieces[cls]
     tallest = 0
     for i in range(20000):
         why = vm.frame()
@@ -369,20 +370,30 @@ def check_game_over(ctx):
         cells = cells_of(ctx.ad.well(vm))
         tallest = max(tallest, height(cells, ctx.ad.rows))
     else:
-        raise Fail('with no keys pressed the pieces never filled the well (20000 frames)')
+        raise Fail(f'{cls or "random"} pieces, no keys: the pieces never filled the well (20000 frames)')
     if why == 'fault':
-        raise Fail(f'the CPU faulted: {vm.faulted}')
+        raise Fail(f'{cls or "random"} pieces: the CPU faulted: {vm.faulted}')
     if tallest < ctx.ad.rows - 4:
-        raise Fail(f'the program ended ({why}) with the stack only {tallest} rows high')
+        raise Fail(f'{cls or "random"} pieces: the program ended ({why}) with the stack only {tallest} rows high')
     if why == 'exited':
-        return f'at the top (stack {tallest} rows) the program exits to DOS with code {vm.exited}'
+        return 'exits to DOS', tallest
     shots = set()
     for _ in range(40):
         vm.run(1237)
+        if vm.faulted:
+            raise Fail(f'{cls or "random"} pieces: the CPU faulted after game over: {vm.faulted}')
         shots.add(bytes(vm.vram()))
-    state = 'freezes' if len(shots) == 1 else f'keeps drawing ({len(shots)} different screens in 40 samples)'
-    final = cells_of(ctx.ad.well(vm))
-    return f'with the stack {tallest} rows high ({why}) the program {state} showing {len(final)} blocks; no CPU fault'
+    return ('freezes' if len(shots) == 1 else f'keeps drawing ({len(shots)} different screens in 40 samples)'), tallest
+
+
+def check_game_over(ctx):
+    """6. Game over: when the stack reaches the top the program ends play cleanly (freeze, exit or restart); no fault, no garbage."""
+    outcomes = {}
+    for cls in [None] + sorted(ctx.pieces):
+        state, tallest = game_over_once(ctx, cls)
+        outcomes.setdefault(state, []).append(cls or 'random')
+    detail = '; '.join(f'{state}: {" ".join(kinds)}' for state, kinds in outcomes.items())
+    return f'filled with each piece kind and with random pieces, the stack reached the top ({tallest} rows) and the program {detail}; no CPU fault'
 
 
 CHECKS = [check_pieces, check_gravity, check_movement, check_rotation, check_line_clearing, check_game_over]

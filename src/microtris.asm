@@ -14,27 +14,30 @@
 BOARD_ROWS equ 0x18
 
 start:
-        mov bx, sp                  ; bx = board base 0xFFFE
+        xor bx, bx                  ; bx = board base 0: the board is the first 50 bytes of the PSP (the word above it, 0xFFFE, is free)
         mov ax, 0x400f              ; an empty row: walls only (bit 14 on the left, bits 3..0 on the right)
         mov cx, BOARD_ROWS
-        mov di, sp
-        repne stosw                 ; 24 rows (the first ones wrap round into the PSP); cx = 0 afterwards
+        mov di, bx
+        repne stosw                 ; 24 rows; cx = 0 afterwards
         dec cx                      ; cx = 0xFFFF
         or [di], cx                 ; the row after the last one = 0xFFFF: the floor
 
-next_piece:                         ; ---- remove full rows (si = row pointer; first pass reads from the program itself)
-        push ds
-        pop es
+        push 0xb800
+        pop es                      ; es = the screen from here on (the board is only touched through ds)
+
+next_piece:
+        cmp si, bx
+        jl next_piece               ; game over: the piece landed on the row above the board (si = -2): stay here, board on screen
+        ; ---- remove full rows (si = row pointer; first pass reads from the program itself)
 scan:   cmp word [si], 0x7fff
         ja pick                     ; reached the floor (0xFFFF > 0x7FFF): done
         jne advance
-        mov di, si                  ; a full row: copy every row above it down by one (backwards)
-        std
-        lodsw
-.shift: movsw
+.shift: mov ax, [si - 2]            ; a full row: copy every row above it down by one (backwards)
+        mov [si], ax
+        dec si
+        dec si
         cmp si, bx
         jne .shift                  ; (si is back at the top row now, so the scan carries on from there)
-        cld
 advance:
         lodsw                       ; next row
         jmp scan
@@ -57,8 +60,6 @@ frame:  xor di, di
         dec si
 .fits:  mov al, 0x31                ; opcode 'xor [si],ax': stamp the piece into the board (the cells are empty: xor = or)
         call set_op
-        push 0xb800
-        pop es
         pusha                       ; ---- draw the whole board: 25 rows x 15 cells x 2 columns
         xor al, al                  ; a blank character: only the background colour shows
         mov cl, BOARD_ROWS
