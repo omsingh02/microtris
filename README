@@ -44,8 +44,8 @@ changed:
 
 what the tests found in tinytris
 
-It passes all six feature checks. Two other checks found defects (details in test/NOTES), and I have not reported
-either to its author.
+It passes all six feature checks. Two other checks found defects (details in test/NOTES); reported to its author at
+https://github.com/pellsson/tinytris/issues/1.
 
 1. A vertical I vanishes at the right wall. `l` once too often takes the column shift to 0xff, the CPU masks the
    count, every cell shifts out, and a cell that is not there can never collide. test/fuzz.py (random keys, every

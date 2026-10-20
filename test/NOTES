@@ -35,7 +35,7 @@ behaviour under dosvm.py
 - Game over is a freeze: the spawn/land loop spins without calling the keyboard, so keys do nothing.
 - The left wall is one cell wide and the right wall two, so the well is not centred.
 
-defects found by the extra checks (not reported upstream)
+defects found by the extra checks (reported at https://github.com/pellsson/tinytris/issues/1)
 Neither changes the claim: tinytris still passes the six feature checks.
 
 1. A vertical I is lost at the right wall. The collision test shifts a nibble left by CL (`shl ax,cl`). Pressing `l`
