@@ -40,33 +40,33 @@ def one_run(com, ad, seed, steps, profile, seg, spin):
     rng = random.Random(seed)
     g = Game(com, ad, seed=seed, profile=profile, seg=seg)
     counts = {'left': 0, 'right': 0, 'left blocked': 0, 'right blocked': 0, 'rotate': 0, 'rotate blocked': 0,
-              'other': 0, 'landings': 0}
-    for _ in range(steps):
-        key = rng.choices(['left', 'right', 'rotate', None, 'other'], weights=[4, 4, 3, 3, 1])[0]
-        press = {'left': ad.left, 'right': ad.right, 'rotate': ad.rotate, None: None, 'other': rng.choice(OTHER_KEYS)}[key]
+              'other': 0, 'landings': 0, 'frames': 0}
+
+    def judge(key, press):
+        """One frame with `press` (or none); True when the stack has got high. Raises Fail on anything the rules do not allow."""
+        nonlocal spin
         prev, settled = g.piece, g.settled
         ev = g.step(*([press] if press else []))
+        counts['frames'] += 1
         if isinstance(ev, tuple):
             counts['landings'] += 1
-            if height(g.settled, ad.rows) >= 17:
-                break
-            continue
+            return height(g.settled, ad.rows) >= 17
         new = g.piece
         for dr in (0, 1):                                    # gravity may have dropped it one row in the same frame
             if key in ('left', 'right'):
                 dc = 1 if key == 'right' else -1
                 if new == shifted(prev, dr, dc):
                     counts[key] += 1
-                    break
+                    return False
                 if new == shifted(prev, dr, 0):
                     if not blocked(shifted(prev, dr, dc), settled, ad.rows):
                         raise Fail(f'seed {seed}: {key} was refused with room to move\n{picture(settled | prev, ad.rows, prev)}')
                     counts[key + ' blocked'] += 1
-                    break
+                    return False
             elif key == 'rotate':
                 if new == shifted(prev, dr, 0) or norm(new) == norm(prev):
                     counts['rotate blocked'] += 1
-                    break
+                    return False
                 turns = {t for t in ('cw', 'ccw') if norm(new) == (rotate_cw(norm(prev)) if t == 'cw' else
                                                                     rotate_cw(rotate_cw(rotate_cw(norm(prev)))))}
                 if turns:
@@ -74,14 +74,22 @@ def one_run(com, ad, seed, steps, profile, seg, spin):
                     if not spin:
                         raise Fail(f'seed {seed}: rotation changed direction\n{picture(settled | prev, ad.rows, prev)}')
                     counts['rotate'] += 1
-                    break
+                    return False
             else:
                 if new == shifted(prev, dr, 0):
                     counts['other'] += key == 'other'
-                    break
-        else:
-            raise Fail(f'seed {seed}: after {key!r} ({press!r}) the piece went from\n'
-                       f'{picture(settled | prev, ad.rows, prev)}\nto\n{picture(g.settled | new, ad.rows, new)}')
+                    return False
+        raise Fail(f'seed {seed}: after {key!r} ({press!r}) the piece went from\n'
+                   f'{picture(settled | prev, ad.rows, prev)}\nto\n{picture(g.settled | new, ad.rows, new)}')
+
+    for _ in range(steps):
+        key = rng.choices(['left', 'right', 'rotate', None, 'other'], weights=[4, 4, 3, 3, 1])[0]
+        press = {'left': ad.left, 'right': ad.right, 'rotate': ad.rotate, None: None, 'other': rng.choice(OTHER_KEYS)}[key]
+        if judge(key, press):
+            break
+        for _ in range(rng.choice([0, 0, 0, 0, 8, 32, 128])):      # the piece falls once per ~128 frames: let time pass between keys
+            if judge(None, None):
+                return counts, spin
     return counts, spin
 
 
@@ -109,7 +117,7 @@ def main(argv):
     except Fail as e:
         print(f'{a.com}: FUZZ FAILED ({a.profile} registers, segment {a.seg:04X})\n{e}')
         return 1
-    print(f'{a.com}: {size} bytes, {a.runs} runs x up to {a.steps} frames, {a.profile} registers, segment {a.seg:04X}: '
+    print(f'{a.com}: {size} bytes, {a.runs} runs x up to {a.steps} key events, {a.profile} registers, segment {a.seg:04X}: '
           f'every frame was one whole piece on the stack; {total}; rotation direction {sorted(spin)}  [{time.time() - t0:.0f}s]')
     return 0
 

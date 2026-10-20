@@ -1,6 +1,6 @@
 # make        build build/microtris.com and print its size
 # make verify build, rebuild the holder from reference/, run the six feature checks on both on the VM
-# make holder-bug  show the random-key failure of the holder's program
+# make holder-bug  show what the holder's program does wrong (random keys; stores outside the text page)
 # make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
 NASM ?= nasm
 PY   ?= python3 -I
@@ -24,12 +24,17 @@ $(HOLDER): reference/tinytris-reconstructed.asm
 verify: all $(HOLDER)
 	$(PY) tests/features.py $(HOLDER) tinytris
 	$(PY) tests/features.py $(COM) microtris
+	$(PY) tools/cpu-level.py $(HOLDER) --data 14
+	$(PY) tools/cpu-level.py $(COM)
 	$(PY) tools/reach.py $(COM)
 	$(PY) tests/fuzz.py $(COM) microtris
+	$(PY) tests/footprint.py $(COM) microtris
 
-# not part of verify: random keys make the holder lose a vertical I at the right wall (exit status 1 is the expected result)
+# not part of verify: random keys make the holder lose a vertical I at the right wall, and its draw loop writes over the
+# whole 64 KB of the B800 segment every frame (exit status 1 is the expected result for both)
 holder-bug: $(HOLDER)
 	-$(PY) tests/fuzz.py $(HOLDER) tinytris --runs 40 --steps 600 --seed 100 2>&1 | head -12
+	-$(PY) tests/footprint.py $(HOLDER) tinytris
 
 dosbox: all
 	$(PY) tests/dosbox_check.py $(COM) microtris

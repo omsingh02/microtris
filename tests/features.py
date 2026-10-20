@@ -50,6 +50,7 @@ class Game:
         if byte is not None:
             self.vm.pit_fn = lambda: self.byte
         self.settled, self.piece, self.cls = set(), None, None
+        self._raw = None                                    # the last screen, as bytes: a frame that changed nothing needs no decoding
         self.frames = 0
         self.cleared = []                                   # rows cleared by each landing, in order
         self.last_event = None
@@ -80,6 +81,11 @@ class Game:
         if why != 'poll':
             raise Fail(f'the program stopped ({why}; exited={self.vm.exited}; fault={self.vm.faulted}) after {self.frames} frames')
         self.frames += 1
+        raw = bytes(self.vm.vram()) if hasattr(self.vm, 'vram') else None
+        if raw is not None and raw == self._raw and self.piece is not None:
+            self.last_event = 'move'
+            return 'move'
+        self._raw = raw
         C = self.cells()
         if self.piece is None:
             cls = classify(C)
@@ -233,14 +239,14 @@ def check_gravity(ctx):
     for cls, b in sorted(ctx.pieces.items()):
         g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg)
         rows = [g.top()]
-        for _ in range(3000):
+        for _ in range(6000):
             if isinstance(g.step(), tuple):
                 break
             if g.top() - rows[-1] not in (0, 1):
                 raise Fail(f'{cls} piece jumped {g.top() - rows[-1]} rows in one frame')
             rows.append(g.top())
         else:
-            raise Fail(f'{cls} piece did not land in 3000 frames (it stopped at row {rows[-1]})')
+            raise Fail(f'{cls} piece did not land in 6000 frames (it stopped at row {rows[-1]})')
         if rows[-1] <= rows[0]:
             raise Fail(f'{cls} piece did not fall')
         drops.append(rows[-1] - rows[0])
@@ -362,15 +368,17 @@ def game_over_once(ctx, cls):
     vm = DosVM(ctx.com, seg=ctx.seg)
     if cls is not None:
         vm.pit_fn = lambda: ctx.pieces[cls]
-    tallest = 0
-    for i in range(20000):
+    tallest, last = 0, None
+    for i in range(60000):
         why = vm.frame()
         if why != 'poll':
             break
-        cells = cells_of(ctx.ad.well(vm))
-        tallest = max(tallest, height(cells, ctx.ad.rows))
+        raw = bytes(vm.vram())
+        if raw != last:                                      # decode only when the screen changed
+            last = raw
+            tallest = max(tallest, height(cells_of(ctx.ad.well(vm)), ctx.ad.rows))
     else:
-        raise Fail(f'{cls or "random"} pieces, no keys: the pieces never filled the well (20000 frames)')
+        raise Fail(f'{cls or "random"} pieces, no keys: the pieces never filled the well (60000 frames)')
     if why == 'fault':
         raise Fail(f'{cls or "random"} pieces: the CPU faulted: {vm.faulted}')
     if tallest < ctx.ad.rows - 4:

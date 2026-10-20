@@ -59,7 +59,7 @@ frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
         pusha                       ; ---- draw the whole board: 25 rows x 15 cells x 2 columns
         xor bx, bx                  ; (bx walks down the board)
         xor al, al                  ; a blank character: only the background colour shows
-        mov cl, BOARD_ROWS
+        mov cx, BOARD_ROWS + 1
 .row:   mov dx, 0x4000
 .cell:  test [bx], dx
         lahf                        ; the attribute comes from the flags: ZF (bit 6) = empty = red background, else black
@@ -70,13 +70,12 @@ frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
         add di, 0x64                ; down a screen row (160 - 60 bytes)
         inc bx
         inc bx
-        dec cx
-        jae .row
+        loop .row
         popa
         popf
         jne next_piece              ; the piece collided: it has landed. next piece (and full rows go)
         call set_op                 ; (al is still 0x31) xor the piece out of the board again
-        add ch, 0x20                ; gravity: every 8th pass the piece moves down a row
+        add ch, 2                   ; gravity: every 128th pass the piece moves down a row (about the time the holder takes)
         jae .nodrop
         lodsw
 .nodrop:
