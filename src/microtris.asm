@@ -42,9 +42,8 @@ advance:
 
 pick:   in al, 0x40                 ; random piece from the timer: 0..6
         aam 7
-        cbw                         ; ah = 0 (aam leaves the quotient there)
-        xchg bp, ax
-        mov al, [bp + pieces]       ; one byte = rows 0 and 1 of the piece's 4x4 box
+        mov bx, pieces
+        xlat                        ; one byte = rows 0 and 1 of the piece's 4x4 box
         cbw                         ; (no piece byte has bit 7 set)
         xchg dx, ax                 ; dx = the 4x4 mask
         mov cl, 7                   ; column shift: start in the middle
