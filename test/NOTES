@@ -1,0 +1,52 @@
+tinytris (247 bytes), read from its disassembly
+
+Source: `objdump -D -b binary -m i8086 -M intel --adjust-vma=0x100 tinytris.com` on the fetched .COM (its repo ships no
+.asm). What is here is what I read in the bytes and then confirmed under the harness.
+
+data layout
+- The board is the stack: `mov bx,sp` (bx = 0xfffe). 24 rows of one word each, row i at bx + 2i modulo 64 KB, so the
+  first rows wrap round to the PSP at 0x0000..0x002d. A 25th row of 0xffff is the floor.
+- One row is 13 bits: template 0x1003 (bits 0-1 left wall, bit 12 right wall, bits 2-11 the ten cells). A full row is
+  0x1fff.
+- A piece is 16 bits, a 4x4 mask with one nibble per row. The seven shapes are a 14-byte table at the end of the file
+  (2222 4460 2260 06c0 0c60 0660 04e0); there is no table of rotations, rotation is computed (46 bytes, a transpose by
+  a shift/or loop).
+- The piece comes from the timer counter (`in al,0x40`), `aam 7`, an index into the table.
+
+tricks
+1. A self-modifying routine: the opcode of `and [si],ax` is overwritten with 0x23 (`and ax,[si]`: test), 0x09 (`or
+   [si],ax`: stamp) or 0x31 (`xor [si],ax`: toggle), so one loop does test, settle and draw.
+2. The collision result is in ZF: the routine ORs every overlap into di, and `or di,di` leaves ZF = "no collision".
+3. Undo by the stack: a move is applied and tested; the caller's `push cx / push dx` copies are discarded (`pop ax;
+   pop ax`) or restored (`pop dx; pop cx`). `push 0x138` first makes `ret` jump back to the loop.
+4. Row clear is a backward `movsw` loop under `std`, with no row counting.
+5. It draws straight into text video memory: 13 cells of 2 characters per row, attribute 0x44 or 0x77, 24 rows.
+6. Gravity is a free-running counter: `add ch,0x20; jae` drops the piece every 8th pass.
+
+entry assumptions it makes
+DS=CS=SS, a writable stack, text mode already on, and SI=0x100 (`cmp [si],0x1fff` reads the program's own first bytes
+on the first pass).
+
+behaviour under dosvm.py
+- Keys: j left, l right, k rotate; every other key is read and ignored.
+- A frame is one INT 16h AH=1 peek, then an AH=0 read only if a key is there. Gravity is every 8th frame; one frame is
+  about 44,000 instructions, almost all of it redrawing.
+- No pause: the archive's "pause" is the emulator's hotkey.
+- Game over is a freeze: the spawn/land loop spins without calling the keyboard, so keys do nothing.
+- The left wall is one cell wide and the right wall two, so the well is not centred.
+
+defects found by the extra checks (not reported upstream)
+Neither changes the claim: tinytris still passes the six feature checks.
+
+1. A vertical I is lost at the right wall. The collision test shifts a nibble left by CL (`shl ax,cl`). Pressing `l`
+   once too often takes CL to 0xff; the 80186 masks the count to 5 bits, 31 shifts a whole nibble out, and a cell that
+   no longer exists can never collide. The piece disappears from the screen and from the board. `make holder-bug`
+   shows it (fuzz.py). microtris moves the well up two bits so that CL = 0 is never a valid position, and reach.py
+   checks that no reachable position loses a cell.
+2. The draw loop does not end where it says. It is `mov cl,24 ... dec cx / jae .row`: `dec` leaves CF alone, so the loop
+   ends only when `add di,0x6c` finally carries, after about 410 rows, when di wraps. Every frame it writes about 64 KB
+   over ES=B800: the other seven text pages and, above them, 0xc0000..0xc7fff (video BIOS ROM area, where a real bus
+   ignores the writes and an emulator may not). This is also most of its 44,000 instructions per frame, so it sets its
+   gravity speed. `make holder-bug` shows it (footprint.py; the VM maps all 1 MB as RAM, which is why the six checks
+   never notice). microtris draws 25 rows with `loop` at the same size and compensates in the gravity step (`add ch,2`,
+   every 128th pass); `make speed` measures both.

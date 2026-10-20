@@ -1,0 +1,85 @@
+microtris - a complete Tetris in 209 bytes
+
+microtris is Tetris as a 209-byte DOS .COM file. The smallest complete one I know of, pellsson's tinytris
+(https://github.com/pellsson/tinytris), is 247. Both have the same six features: seven pieces, gravity, move, rotate,
+line clearing, and a game over (a freeze). CLAIM says what "complete" means and why the line is there. There is no
+record body for this: the claim is "209 bytes, six features, `make test` says so".
+
+    $ make
+    build/microtris.com: 209 bytes
+
+make             build (needs nasm)
+make play        play it in DOSBox (needs dosbox)
+make quick       the checks on microtris only, a few minutes
+make test        quick, then tinytris through the same checks (fetched, sha256 checked)
+make matrix      the checks again with other registers at entry, load segments and seeds
+make dosbox      the game under real DOSBox on a private X display
+make holder-bug  the two defects found in tinytris
+make speed       instructions per row of fall, both programs
+
+The checks need python3 with unicorn and capstone (arch: python-unicorn python-capstone). make dosbox also needs
+dosbox, xdotool, Xvfb, ImageMagick and Pillow.
+
+keys
+
+j left, l right, k rotate. Nothing else does anything. The fall speed is the CPU's: neither program has a timer.
+make play fixes DOSBox at 400 cycles, about a row a second; Ctrl+F11 and Ctrl+F12 slow it down and speed it up. When
+the stack reaches the top the program freezes with the board on screen; close the window.
+
+how it got smaller
+
+The design is pellsson's: one 16-bit word per row for the board, a piece as a 4x4 bit mask, one routine that tests,
+stamps and erases by patching its own opcode, the result carried in the zero flag, undo through the stack. What
+changed:
+
+- Rotation by multiplication. A column of the mask is gathered into a nibble with one `and` and one `imul 0x1248`
+  (the partial products never meet), four times round: 27 bytes instead of 46.
+- One byte per piece. Every tetromino fits in two rows of its box, so the table is 7 bytes read with `xlat`.
+- The colour comes from the flags. After `test [si],dx`, `lahf` already holds an attribute byte whose bit 6 is "was
+  empty": red well, black blocks and walls, no compare, no jump.
+- The board starts at offset 0 (the first 50 bytes of the PSP), so the row-shift loop ends when si reaches 0 and a
+  negative si can mean game over.
+- Smaller things: xor for both stamp and erase, jmp where tinytris pushes a return address, the shared routine clears
+  its own accumulator, the board is walked with lodsw.
+
+what the tests found in tinytris
+
+It passes all six feature checks. Two other checks found defects (details in test/NOTES), and I have not reported
+either to its author.
+
+1. A vertical I vanishes at the right wall. `l` once too often takes the column shift to 0xff, the CPU masks the
+   count, every cell shifts out, and a cell that is not there can never collide. test/fuzz.py (random keys, every
+   frame judged) shows it. microtris moves the well so that shift 0 is never legal, and test/reach.py checks by
+   exhaustive search that no reachable position loses a cell.
+2. Its draw loop never ends where it says: `dec cx / jae` ignores the carry, so the loop stops only when the screen
+   pointer wraps, about 410 rows later, after writing roughly 64 KB over the B800 segment every frame. The VM maps
+   all memory as RAM, so the six checks cannot see it; test/footprint.py can. microtris had the same loop until that
+   check caught it. It draws 25 rows now. A row of fall takes 315,265 instructions against tinytris's 355,481
+   (make speed).
+
+what this does not claim
+
+- Not a record by anyone's authority: a number, a rule set and a harness you can run.
+- Not tested on hardware: a deterministic VM on Unicorn (test/dosvm.py: no wall clock, scripted keys and timer) and
+  one emulator, DOSBox, as a cross-check.
+- 80186 instructions (pusha, imul with an immediate, shifts by immediate), like tinytris. `aam 7` is not base 7 on a
+  NEC V20/V30, also like tinytris.
+- It never returns to DOS, because its board sits on the PSP, and it does not clear the screen first.
+- Prior art I know: tinytris (247), 4is256 (256, with scoring and colours), the Hugi Compo #22 winner (363), TetrOS
+  (446). If you know of a complete Tetris below 209 bytes, I would like to hear of it.
+
+credit and provenance
+
+The design is pellsson's: 62 of the 104 instruction lines in microtris.asm are his, in the same order (difflib over
+the instruction text; comments, labels and directives ignored). tinytris.com is not in this repo, since the upstream
+repo has no licence: make fetches it and checks the sha256.
+
+This was written with Claude Code (Anthropic's coding assistant). The design choices, the rules and the numbers are
+in the repo; what it claims is checked by `make test`, which does not depend on who wrote what.
+
+licence
+
+LICENSE has the details. The test directory, the Makefile and the documents are copyright 2026 Om Singh, AGPL-3.0 or
+later. microtris.asm and the .COM are a derived work of tinytris, which has no licence, so that file is published for
+credit and study and is not offered under any licence. If pellsson adds a licence to tinytris, or asks for the parts
+taken from it to go, that is what happens here. STYLE says how the repo is kept.

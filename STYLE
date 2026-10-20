@@ -1,0 +1,49 @@
+STYLE - how this repo is kept
+
+Each rule in the first part is here because something went wrong without it. A rule with no failure behind it is in
+the second part, and is only a habit.
+
+things that went wrong, and the rule that came out of each
+
+1. Numbers in text went stale. The size changed six times (247, 224, 217, 214, 210, 209) and the source header kept
+   describing a design it no longer had.
+   -> The byte count is written in README and nowhere else; `make` prints it. Comments in microtris.asm say why an
+      instruction is there or what trick it is, never what it does and never how big the file is.
+
+2. The first six checks passed while the program wrote 64 KB over video memory every frame, and a vertical I could
+   vanish at a wall. Only later checks saw it.
+   -> A check is added when a bug got past the existing ones, not before. It must be shown to fail on a program that
+      has the bug (`make holder-bug`), or it proves nothing.
+
+3. Numbers in README came from throwaway scripts that were not in the repo.
+   -> A measurable claim in README or CLAIM names the make target that produces it. No target, no claim.
+
+4. Third-party code was committed without a licence, and the history had to be rewritten.
+   -> Nothing goes in the repo that could not be published. Other people's files are fetched by make and checked
+      against a sha256 (build/tinytris.com).
+
+5. Compiled python files were committed, and the history had to be rewritten again.
+   -> Build output and caches are never committed. Look at `git status` before every commit.
+
+6. A full test run took 29 minutes once, on a loaded machine, so it stopped being run.
+   -> `make quick` while editing. `make test` before every commit that touches microtris.asm or test/. `make matrix`
+      and `make dosbox` before anything is published.
+
+7. Work that was not the owner's to do alone nearly went out: a push, a message to someone, a submission.
+   -> Anything that leaves this machine waits for the owner to say so, each time. History is only rewritten before
+      the first push, and a bundle of the old history is kept outside the repo.
+
+8. The program is derived from someone else's, and the numbers saying how much were first wrong (112, then 104).
+   -> README says what is taken from where and how it was counted. If the program or any text was written with a
+      tool's help, README says that too.
+
+habits (no failure behind them, this is just how it is written)
+
+- Documents are plain text, named in capitals without an extension: README, CLAIM, STYLE, LICENSE.
+- The program is at the top. Everything that only checks it is under test/.
+- Assembly: labels in column 0, instructions at column 8, mnemonics and hex in lowercase, `.name` for labels that
+  belong to one routine, at most 120 columns.
+- Python: 4 spaces, single quotes, at most 120 columns, run as `python3 -I`. Outside the standard library only unicorn
+  and capstone, plus Pillow for the optional DOSBox check. No formatter or linter is configured.
+- Makefile: POSIX make, no extensions.
+- Commit messages: one line, lowercase, what changed. A size change says the number ("209 bytes").

@@ -1,0 +1,82 @@
+CLAIM - what is claimed, and the rules it is measured by
+
+The claim: the smallest complete Tetris, as a 16-bit x86 DOS .COM program. The current holder is pellsson's tinytris
+(https://github.com/pellsson/tinytris, tinytris.com, sha256 0cbd70be...4bfa). Its README calls it the first complete
+Tetris in 256 bytes or less and says smaller ones exist but change the game, usually by dropping or changing pieces.
+This project draws the same line.
+
+There is no official body for this, so the claim is only as good as its rules and how easy they are to re-check.
+Everything below is checked by `make test`, not by eye, and tinytris runs through the same harness.
+
+1. what is measured
+
+- One file, <name>.COM. Its size in bytes is the number. No overlays, no second file; a self-extracting COM is
+  measured as the COM.
+- Nothing is read from outside the file, or from DOS/BIOS data the program did not put there: no font, no save file,
+  no peeking into another program. BIOS and DOS services are allowed.
+
+2. the machine, and what the program relies on
+
+- Real-mode x86 run as a DOS .COM: CS=DS=ES=SS, IP=0x100, SP=0xfffe, colour text mode 80x25 already on (video memory
+  at B800:0000), BIOS keyboard services (INT 16h), the timer counter at port 0x40.
+- The registers DOS gives a .COM at entry are not relied on: `--profile zeroed` runs with every general register 0
+  (make matrix). The program may be loaded at any segment (--seg, make matrix).
+- The first 50 bytes of the PSP are the board. microtris overwrites the PSP's INT 20h, memory size and termination
+  vectors, so it never returns to DOS: game over is a deliberate freeze with the final board on screen, and the
+  machine is reset. (tinytris's board also runs into the PSP.) Check 6 accepts a freeze, an exit or a restart.
+- The instruction set level is checked by test/cpu_level.py: capstone over the whole code, plus a run that watches
+  every basic block and every store into the program's own code. Both programs use 80186 instructions and nothing
+  above. Anything above would be reported as a separate, labelled number.
+- Both programs use `aam 7` for the random piece. On Intel and AMD the immediate is the base; the NEC V20/V30 ignore it
+  and divide by 10.
+
+3. what "complete" means: six features, each tested (test/features.py)
+
+1  all seven tetrominoes appear, and each spawn is exactly one tetromino
+2  gravity: with no input a piece falls one row at a time until it lands
+3  move left and right, blocked by the walls and by settled blocks
+4  rotation, blocked when it would overlap: four presses return the shape, and at both walls and beside a stack no
+   cell is lost or moved into a block
+5  line clearing: scripted 1-, 2-, 3- and 4-row clears, then a bot plays hundreds of pieces and every landing is
+   compared with a reference model
+6  game over: a stack that reaches the spawn point ends play (stop, freeze or restart) with no fault and no garbage
+
+Landing is part of 2 and 5: no landing, no stack. The checks read the screen, not the program's memory: an adapter per
+program (test/adapters.py) says where the well is and what a block looks like, and test/tetris_model.py decides what
+the board must be.
+
+Why six and not the seven of the Tetris4K archive. The archive lists tinytris with a seventh feature, "pause: pause
+emulation", which is the emulator being paused, not the program. tinytris has no key that stops its gravity. A program
+with a real pause would be stronger and would be reported separately. The archive also lists tinytris at 251 bytes (an
+older build); the repo ships 247, the number measured here.
+
+4. what is not required (same as tinytris)
+
+Scoring, next-piece preview, levels, colours per piece, sound, a title screen, keys other than left, right and rotate,
+speed independent of the CPU. Gravity is a free-running counter in both programs, so the fall speed is whatever the CPU
+does; `make speed` gives instructions per row of fall.
+
+5. extra evidence (not part of the six; run by `make test`)
+
+test/reach.py      every (shape, column, row) a piece can reach in an empty well: all four cells exist and are inside
+                   the well, for all 7 pieces
+test/fuzz.py       random keys, idle stretches and keys the game does not use, on random stacks; after every frame the
+                   screen is the settled stack plus one whole tetromino, a sideways key moves one column or is really
+                   blocked, rotation always turns the same way
+test/footprint.py  every store the CPU makes lies in the program's own segment or the first text page; at most one byte
+                   of its own code is written (the patched opcode)
+test/cpu_level.py  nothing above 80186; every basic block starts on an instruction the static listing found
+make matrix        checks 1-6, fuzz and footprint again with zeroed registers, other load segments and seeds
+make dosbox        the program under real DOSBox, a second implementation of DOS (not deterministic, so a cross-check)
+
+tinytris passes the six checks. It fails two of the extra ones: it loses a vertical I at the right wall (fuzz), and it
+writes about 64 KB over the B800 segment every frame (footprint). `make holder-bug` shows both. microtris passes
+both. The six-feature claim is made on the same footing for both programs; the two defects are findings, not part of
+the claim.
+
+6. limits
+
+- Speed is CPU-bound. In DOSBox use a fixed cycle count; make play uses 400.
+- Game over freezes. The look is a red well, black walls and blocks, text-mode cells, no title, no score.
+- The evidence is simulation plus one emulator, not hardware. The checks cannot prove the absence of every bug; they
+  show which behaviours were exercised, and how.
