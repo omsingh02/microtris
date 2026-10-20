@@ -1,6 +1,7 @@
 # make        build build/microtris.com and print its size
 # make verify build, rebuild the holder from reference/, run the six feature checks on both on the VM
 # make holder-bug  show what the holder's program does wrong (random keys; stores outside the text page)
+# make -j4 -Otarget robust   the same checks with zeroed registers, other load segments and seeds
 # make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
 NASM ?= nasm
 PY   ?= python3 -I
@@ -35,6 +36,18 @@ verify: all $(HOLDER)
 holder-bug: $(HOLDER)
 	-$(PY) tests/fuzz.py $(HOLDER) tinytris --runs 40 --steps 600 --seed 100 2>&1 | head -12
 	-$(PY) tests/footprint.py $(HOLDER) tinytris
+
+# the same program under other entry conditions: profile (registers at entry), load segment, random seed.
+# usage: make -j4 -Otarget robust
+ROBUST = zeroed-1000-11 dos-0900-12 dos-5555-13 zeroed-A000-14
+robust: $(addprefix robust-,$(ROBUST))
+
+robust-%: all
+	@p=$(word 1,$(subst -, ,$*)); s=0x$(word 2,$(subst -, ,$*)); n=$(word 3,$(subst -, ,$*)); \
+	echo "== registers at entry: $$p, load segment $$s, seed $$n" && \
+	$(PY) tests/features.py $(COM) microtris --profile $$p --seg $$s --seed $$n && \
+	$(PY) tests/fuzz.py $(COM) microtris --profile $$p --seg $$s --seed $$n && \
+	$(PY) tests/footprint.py $(COM) microtris --profile $$p --seg $$s
 
 dosbox: all
 	$(PY) tests/dosbox_check.py $(COM) microtris

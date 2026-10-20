@@ -25,6 +25,10 @@ class Fail(Exception):
     pass
 
 
+class Stopped(Fail):
+    """The program stopped asking for keys (a freeze, an exit, a fault). Whether that is a failure depends on the stack."""
+
+
 def cells_of(well):
     return {(r, c) for r, row in enumerate(well) for c, v in enumerate(row) if v}
 
@@ -79,7 +83,7 @@ class Game:
         self.vm.press(*keys)
         why = self.vm.frame()
         if why != 'poll':
-            raise Fail(f'the program stopped ({why}; exited={self.vm.exited}; fault={self.vm.faulted}) after {self.frames} frames')
+            raise Stopped(f'the program stopped ({why}; exited={self.vm.exited}; fault={self.vm.faulted}) after {self.frames} frames')
         self.frames += 1
         raw = bytes(self.vm.vram()) if hasattr(self.vm, 'vram') else None
         if raw is not None and raw == self._raw and self.piece is not None:
@@ -157,7 +161,7 @@ def place(game, want, col):
 
 def play(ctx, plan, then=None):
     """plan: [(piece, orientation index, column)]. The random source is set so each piece is the one asked for."""
-    g = Game(ctx.com, ctx.ad, byte=ctx.pieces[plan[0][0]], seg=ctx.seg)
+    g = Game(ctx.com, ctx.ad, byte=ctx.pieces[plan[0][0]], seg=ctx.seg, profile=ctx.profile)
     cleared = []
     for i, (cls, oi, col) in enumerate(plan):
         if g.cls != cls:
@@ -211,15 +215,15 @@ def bot_choice(settled, cls, rows, rng, explore):
 
 # ---- the six checks --------------------------------------------------------------------------------------------
 class Ctx:
-    def __init__(self, com, ad, seed, pieces_to_play, seg=0x1000):
-        self.com, self.ad, self.seed, self.n, self.seg = com, ad, seed, pieces_to_play, seg
+    def __init__(self, com, ad, seed, pieces_to_play, seg=0x1000, profile='dos'):
+        self.com, self.ad, self.seed, self.n, self.seg, self.profile = com, ad, seed, pieces_to_play, seg, profile
         self.pieces = {}                                    # piece name -> a PIT byte that makes the program spawn it
         self.spawned = {}
 
 
 def learn_pieces(ctx):
     for b in range(256):
-        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg)
+        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg, profile=ctx.profile)
         ctx.pieces.setdefault(g.cls, b)
         ctx.spawned[g.cls] = ctx.spawned.get(g.cls, 0) + 1
 
@@ -237,7 +241,7 @@ def check_gravity(ctx):
     """2. Gravity: with no keys every piece falls by itself, one row at a time, and lands."""
     drops = []
     for cls, b in sorted(ctx.pieces.items()):
-        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg)
+        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg, profile=ctx.profile)
         rows = [g.top()]
         for _ in range(6000):
             if isinstance(g.step(), tuple):
@@ -256,7 +260,7 @@ def check_gravity(ctx):
 def check_movement(ctx):
     """3. Move left and right; the walls and settled blocks stop the piece."""
     for cls, b in sorted(ctx.pieces.items()):
-        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg)
+        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg, profile=ctx.profile)
         for key, name, edge_col in ((g.ad.left, 'left', 0), (g.ad.right, 'right', W - 1)):
             for _ in range(16):
                 g.step(key)
@@ -290,7 +294,7 @@ def check_movement(ctx):
 def check_rotation(ctx):
     """4. Rotation: 4 presses return the shape, a piece keeps its shape and stays in the well at the walls and beside blocks."""
     for cls, b in sorted(ctx.pieces.items()):
-        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg)
+        g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg, profile=ctx.profile)
         shapes = [norm(g.piece)]
         for _ in range(4):
             g.step(g.ad.rotate)
@@ -348,24 +352,34 @@ def check_line_clearing(ctx):
     g, cl = play(ctx, [('I', 1, c) for c in range(10)])
     if cl[-1] != 4 or g.settled:
         raise Fail(f'4 rows: cleared {cl}, board:\n{picture(g.settled, R)}')
-    # the bot
+    # the bot. It plays to the program's own game over and then starts the program again; every landing is judged.
     rng = random.Random(ctx.seed)
-    g = Game(ctx.com, ctx.ad, byte=ctx.pieces[rng.choice(sorted(ctx.pieces))], seg=ctx.seg)
+    hist, topped = {k: 0 for k in range(5)}, 0
+    g = Game(ctx.com, ctx.ad, byte=ctx.pieces[rng.choice(sorted(ctx.pieces))], seg=ctx.seg, profile=ctx.profile)
     for i in range(ctx.n):
         oi, col = bot_choice(g.settled, g.cls, R, rng, explore=0.25)
         g.byte = ctx.pieces[rng.choice(sorted(ctx.pieces))]
-        place(g, orientations(BASE[g.cls])[oi], col)
-    hist = {k: g.cleared.count(k) for k in range(5)}
+        try:
+            place(g, orientations(BASE[g.cls])[oi], col)
+        except Stopped as e:
+            if height(g.settled, R) < R - 4 or g.vm.faulted:
+                raise Fail(f'{e}, with the stack only {height(g.settled, R)} rows high')
+            topped += 1                                      # the stack reached the top: that is game over, not a failure
+            for k in range(5):
+                hist[k] += g.cleared.count(k)
+            g = Game(ctx.com, ctx.ad, byte=ctx.pieces[rng.choice(sorted(ctx.pieces))], seg=ctx.seg, profile=ctx.profile)
+    for k in range(5):
+        hist[k] += g.cleared.count(k)
     for k in (1, 2):
         if not hist[k]:
             raise Fail(f'the bot never saw a {k}-row clear in {ctx.n} pieces (histogram {hist}); raise --pieces')
-    return (f'scripted 1-, 2-, 3- and 4-row clears right; then {ctx.n} bot-played landings all matched the rules '
-            f'(rows cleared per landing: {hist})')
+    return (f'scripted 1-, 2-, 3- and 4-row clears right; then {sum(hist.values())} bot-played landings all matched the rules '
+            f'(rows cleared per landing: {hist}; the bot topped out {topped}x and the program was started again)')
 
 
 def game_over_once(ctx, cls):
     """Fill the well with pieces of one kind (cls None: the machine's own random stream) until the program stops playing."""
-    vm = DosVM(ctx.com, seg=ctx.seg)
+    vm = DosVM(ctx.com, seg=ctx.seg, profile=ctx.profile)
     if cls is not None:
         vm.pit_fn = lambda: ctx.pieces[cls]
     tallest, last = 0, None
@@ -414,10 +428,12 @@ def main(argv):
     p.add_argument('--pieces', type=int, default=200, help='bot-played pieces in check 5')
     p.add_argument('--seed', type=int, default=1)
     p.add_argument('--seg', type=lambda s: int(s, 0), default=0x1000, help='segment the program is loaded at')
+    p.add_argument('--profile', default='dos', choices=['dos', 'zeroed'],
+                   help="registers at entry: what DOS gives a .COM, or every general register 0")
     p.add_argument('--only', default='', help='comma separated check numbers, e.g. 1,3')
     a = p.parse_args(argv)
     com = open(a.com, 'rb').read()
-    ctx = Ctx(com, ADAPTERS[a.adapter], a.seed, a.pieces, a.seg)
+    ctx = Ctx(com, ADAPTERS[a.adapter], a.seed, a.pieces, a.seg, a.profile)
     print(f'{a.com}: {len(com)} bytes, adapter {a.adapter}, seed {a.seed}, load segment {a.seg:04X}')
     t0 = time.time()
     learn_pieces(ctx)

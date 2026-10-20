@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """footprint.py - where does the program write? Every store the CPU makes outside the program's own 64 KB segment is checked.
 
-    python3 -I tests/footprint.py <program.com> <adapter> [--seg 0xNNNN] [--frames N]
+    python3 -I tests/footprint.py <program.com> <adapter> [--seg 0xNNNN] [--profile dos|zeroed] [--frames N]
 
 Extra evidence, not one of the six features. The VM maps all 1 MB as RAM, so a program that scribbles over memory it does
 not own would still pass the six checks; this one would not. The program is played with random keys and idle stretches,
@@ -32,12 +32,13 @@ def main(argv):
     p.add_argument('com')
     p.add_argument('adapter', choices=sorted(ADAPTERS))
     p.add_argument('--seg', type=lambda s: int(s, 0), default=0x1000)
+    p.add_argument('--profile', default='dos', choices=['dos', 'zeroed'])
     p.add_argument('--frames', type=int, default=20000, help='frames of random play before the idle stretch')
     a = p.parse_args(argv)
     with open(a.com, 'rb') as f:
         com = f.read()
     ad = ADAPTERS[a.adapter]
-    vm = DosVM(com, seg=a.seg)
+    vm = DosVM(com, seg=a.seg, profile=a.profile)
     base = a.seg << 4
     image = range(base + 0x100, base + 0x100 + len(com))
     forbidden = {}                                                             # name -> [first (address, size), count]

@@ -44,3 +44,24 @@ bytes on the first pass) (?).
   calling the keyboard, so keys do nothing and the machine must be reset. The last board stays on screen.
 - Screen: the board is drawn from column 0, two characters per cell, attribute `0x44` for filled and `0x77` for empty;
   the left wall (bit 12) is one cell wide and the right wall (bits 1-0) two cells wide, so the well is not centred.
+
+## Defects found in the holder by this project's extra checks (2026-10-20)
+
+Neither changes the claim: the holder still passes the six scripted feature checks. They are recorded because the
+harness found them, and because microtris started from the same architecture and had to fix both.
+(Nothing has been reported upstream; that is a decision for the owner of this project.)
+
+1. **A vertical I is lost at the right wall.** The collision test shifts a nibble left by CL (`shl ax,cl`). Pressing
+   `l` once too often takes CL to 0xFF; the 80186 masks the count to 5 bits, 31 shifts out a whole nibble, and a cell
+   that no longer exists can never collide. The piece disappears from the screen (and from the board).
+   `make holder-bug` shows it (`tests/fuzz.py`: random keys, every frame judged). microtris moves the well up two bits
+   so that CL=0 is never a valid position, and `tools/reach.py` proves by exhaustive search that no reachable
+   position loses a cell.
+2. **The draw loop never ends where it says it does.** It is `mov cl,24 ... dec cx / jae .row`: `dec` leaves CF alone, so
+   the loop ends only when `add di,0x6c` finally carries, i.e. after about 410 rows, when DI wraps. Every frame the
+   holder writes about 64 KB over ES=B800: the other seven text pages and, above them, 0xC0000..0xC7FFF (the video
+   BIOS ROM area, where a real bus ignores the writes and an emulator may not). It also explains the 44,000
+   instructions per frame measured above, and so the holder's gravity speed: it is mostly this wasted drawing.
+   `make holder-bug` shows it (`tests/footprint.py`; the VM maps all 1 MB as RAM, which is why the six checks never
+   notice). microtris draws 25 rows with `loop` at the same size and compensates in the gravity step
+   (`add ch,2`, every 128th pass), so one row of fall takes 315,393 instructions against the holder's 355,481 (VM count).
