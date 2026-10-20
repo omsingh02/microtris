@@ -18,6 +18,10 @@ $ make
 build/microtris.com: 209 bytes
 ```
 
+<img src="docs/play.png" width="240" alt="microtris running in DOSBox: a red well, black blocks, an S piece falling onto a stack">
+
+A real DOSBox screenshot from a game played with random keys (`make play` to try it).
+
 Keys: `j` left, `l` right, `k` rotate. Nothing else does anything. `make play` opens it in DOSBox (needs `dosbox`).
 The fall speed is the CPU's speed, as in the original, because there is no timer in it; `tools/play.conf` sets a fixed
 400 cycles, about a row a second, and Ctrl+F11 / Ctrl+F12 slow down or speed up the emulated CPU. When the stack reaches
@@ -69,7 +73,7 @@ make verify              # fetches tinytris.com (sha256 checked), then on both p
 make -j4 -Otarget robust # the same with zeroed registers, other load segments, other seeds
 make dosbox              # microtris under real DOSBox on a private X display, a second implementation of DOS
 make holder-bug          # the holder's two defects
-make lint                # ruff, pylint, vulture, bandit, codespell, typos on the Python and the docs
+make lint                # ruff, pylint, vulture, bandit, codespell, typos, reuse (licence headers)
 ```
 
 The deterministic harness is a small real-mode x86 machine on [Unicorn](https://www.unicorn-engine.org/) (`tools/dosvm.py`):
@@ -93,3 +97,11 @@ it and checks the sha256.
 
 This project was written with Claude Code (Anthropic's coding assistant). The design choices, the rules and the numbers
 are in the repo, and everything it claims is checked by `make verify`, which is the part that does not depend on who wrote what.
+
+## Licence
+
+Two parts, spelled out in [LICENSE](LICENSE). The harness, tools, Makefile and documents are copyright 2026 Om Singh
+and AGPL-3.0-or-later. `src/microtris.asm` and the `.COM` are not: they are a derived work of tinytris, which has no
+licence, so the file as a whole is published for credit and study and is not offered under any licence. If pellsson
+adds a licence to tinytris, or asks for the parts taken from it to go, that is what will happen here. `reuse lint`
+passes.

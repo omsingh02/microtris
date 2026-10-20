@@ -5,7 +5,7 @@
 # make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
 # make play   play it in DOSBox (j left, l right, k rotate)
 # make lint   style, dead code, security and spelling checks on the Python and the docs (ruff pylint vulture bandit
-#             codespell typos)
+#             codespell typos) and the licence headers (reuse)
 NASM ?= nasm
 PY   ?= python3 -I
 COM    = build/microtris.com
@@ -71,6 +71,7 @@ lint:
 	pylint --disable=all --enable=duplicate-code --min-similarity-lines=6 tests tools
 	vulture tests tools
 	bandit -q -r tests tools --ini .bandit
+	reuse lint
 	codespell README.md RULES.md Makefile notes src tests tools ruff.toml
 	typos README.md RULES.md Makefile notes src tests tools ruff.toml
 
