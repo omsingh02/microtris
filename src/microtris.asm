@@ -49,8 +49,7 @@ pick:   in al, 0x40                 ; random piece from the timer: 0..6
         mov cl, 7                   ; column shift: start in the middle
         xor si, si                  ; si = the piece's top row = the top row of the board
 
-frame:  xor di, di
-        call test_piece             ; ZF=1 if the piece fits at si, cl
+frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
         pushf
         je .fits
         dec si                      ; (a collision: step back up a row)
@@ -105,7 +104,6 @@ rotate:                             ; dx = mask -> dx = mask turned 90 degrees (
         dec bp
         jnz .col
         mov dx, di
-        xor di, di
 move:   call test_piece
         jne undo
         pop ax                      ; it fits: throw away the saved cx/dx
@@ -121,6 +119,7 @@ sideways:
 test_piece:
         mov al, 0x23                ; opcode 'and ax,[si]'
 set_op: mov [op], al                ; (self-modifying: the opcode byte below is patched)
+        xor di, di                  ; di collects the cells that collide; the caller gets di = 0 back
         pusha
 nib:    mov ax, dx
         and ax, 0xf
