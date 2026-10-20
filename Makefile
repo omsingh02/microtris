@@ -3,6 +3,7 @@
 # make holder-bug  show what the holder's program does wrong (random keys; stores outside the text page)
 # make -j4 -Otarget robust   the same checks with zeroed registers, other load segments and seeds
 # make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
+# make play   play it in DOSBox (j left, l right, k rotate)
 # make lint   style, dead code, security and spelling checks on the Python and the docs (ruff pylint vulture bandit
 #             codespell typos)
 NASM ?= nasm
@@ -56,6 +57,12 @@ robust-%: all
 
 dosbox: all
 	$(PY) tests/dosbox_check.py $(COM) microtris
+
+# DOS file names are 8 characters at most, so the game is played from a copy called tetris.com
+play: all
+	@mkdir -p build/play
+	cp $(COM) build/play/tetris.com
+	dosbox -conf tools/play.conf
 
 lint:
 	ruff check tests tools

@@ -18,10 +18,10 @@ $ make
 build/microtris.com: 209 bytes
 ```
 
-Keys: `j` left, `l` right, `k` rotate. Nothing else does anything. The fall speed is the CPU's speed, as in the original,
-because there is no timer in it; in DOSBox use a fixed cycle count (the tests use `cycles=fixed 400`, which is about a row
-a second; I have not play-tested it for feel). When the stack reaches the top the program freezes with the final board
-on screen; reset the emulator.
+Keys: `j` left, `l` right, `k` rotate. Nothing else does anything. `make play` opens it in DOSBox (needs `dosbox`).
+The fall speed is the CPU's speed, as in the original, because there is no timer in it; `tools/play.conf` sets a fixed
+400 cycles, about a row a second, and Ctrl+F11 / Ctrl+F12 slow down or speed up the emulated CPU. When the stack reaches
+the top the program freezes with the final board on screen; close the window to leave.
 
 ## How it got smaller
 
@@ -87,8 +87,8 @@ no wall clock, a scripted keyboard, a scripted timer port. DOSBox is the cross-c
 
 ## Credit and provenance
 
-The design is [pellsson](https://github.com/pellsson)'s; 62 of the 112 instruction lines in `src/microtris.asm` are
-his, in the same order (difflib over the instruction text, comments ignored). His `tinytris.com` is not in this repo: the upstream repo has no licence, so `make verify` fetches
+The design is [pellsson](https://github.com/pellsson)'s; 62 of the 104 instruction lines in `src/microtris.asm` are
+his, in the same order (difflib over the instruction text; comments, labels and directives ignored). His `tinytris.com` is not in this repo: the upstream repo has no licence, so `make verify` fetches
 it and checks the sha256.
 
 This project was written with Claude Code (Anthropic's coding assistant). The design choices, the rules and the numbers
