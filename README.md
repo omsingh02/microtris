@@ -69,6 +69,7 @@ make verify              # fetches tinytris.com (sha256 checked), then on both p
 make -j4 -Otarget robust # the same with zeroed registers, other load segments, other seeds
 make dosbox              # microtris under real DOSBox on a private X display, a second implementation of DOS
 make holder-bug          # the holder's two defects
+make lint                # ruff, pylint, vulture, bandit, codespell, typos on the Python and the docs
 ```
 
 The deterministic harness is a small real-mode x86 machine on [Unicorn](https://www.unicorn-engine.org/) (`tools/dosvm.py`):

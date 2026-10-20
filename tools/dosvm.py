@@ -19,18 +19,46 @@ What is emulated, and nothing more:
 It does NOT emulate interrupts arriving (no IRQ0/IRQ1 delivery), so a program may poll the tick counter or the
 keyboard but cannot install its own handler and expect it to be called.
 """
+
 import sys
 from collections import deque
-from unicorn import Uc, UcError, UC_ARCH_X86, UC_MODE_16, UC_HOOK_INTR, UC_HOOK_INSN
-from unicorn.x86_const import *
+
+from unicorn import UC_ARCH_X86, UC_HOOK_INSN, UC_HOOK_INTR, UC_MODE_16, Uc, UcError
+from unicorn.x86_const import (
+    UC_X86_INS_IN,
+    UC_X86_INS_OUT,
+    UC_X86_REG_AX,
+    UC_X86_REG_BP,
+    UC_X86_REG_BX,
+    UC_X86_REG_CS,
+    UC_X86_REG_CX,
+    UC_X86_REG_DI,
+    UC_X86_REG_DS,
+    UC_X86_REG_DX,
+    UC_X86_REG_EFLAGS,
+    UC_X86_REG_ES,
+    UC_X86_REG_IP,
+    UC_X86_REG_SI,
+    UC_X86_REG_SP,
+    UC_X86_REG_SS,
+)
 
 # ---- keys: name -> BIOS keystroke word (scan code << 8 | ascii) ----------------------------------------------
-_SCAN = dict(zip("1234567890", range(0x02, 0x0C)))
-_SCAN.update(zip("qwertyuiop", range(0x10, 0x1A)))
-_SCAN.update(zip("asdfghjkl", range(0x1E, 0x27)))
-_SCAN.update(zip("zxcvbnm", range(0x2C, 0x33)))
-KEYS = {'left': 0x4B00, 'right': 0x4D00, 'up': 0x4800, 'down': 0x5000, 'space': 0x3920, 'esc': 0x011B,
-        'enter': 0x1C0D, 'tab': 0x0F09, 'backspace': 0x0E08}
+_SCAN = dict(zip("1234567890", range(0x02, 0x0C), strict=True))
+_SCAN.update(zip("qwertyuiop", range(0x10, 0x1A), strict=True))
+_SCAN.update(zip("asdfghjkl", range(0x1E, 0x27), strict=True))
+_SCAN.update(zip("zxcvbnm", range(0x2C, 0x33), strict=True))
+KEYS = {
+    'left': 0x4B00,
+    'right': 0x4D00,
+    'up': 0x4800,
+    'down': 0x5000,
+    'space': 0x3920,
+    'esc': 0x011B,
+    'enter': 0x1C0D,
+    'tab': 0x0F09,
+    'backspace': 0x0E08,
+}
 for _c, _s in _SCAN.items():
     KEYS[_c] = (_s << 8) | ord(_c)
 for _c in "abcdefghijklmnopqrstuvwxyz":
@@ -41,37 +69,32 @@ def key_word(k):
     return k if isinstance(k, int) else KEYS[k]
 
 
-class Exited(Exception):
-    """The program ended (INT 20h, INT 21h/4C, or a jump into its own exit)."""
-
-
 class DosVM:
-    POLL_COST = 100                     # instructions charged when a run is cut short at a poll (see run())
-    CHUNK = 5000                        # instructions between clock updates
-    INSNS_PER_TICK = 5000               # nominal: 18.2 Hz tick, ~90 K instructions/s machine. Tunable by tests.
+    POLL_COST = 100  # instructions charged when a run is cut short at a poll (see run())
+    CHUNK = 5000  # instructions between clock updates
+    INSNS_PER_TICK = 5000  # nominal: 18.2 Hz tick, ~90 K instructions/s machine. Tunable by tests.
 
     def __init__(self, com, seg=0x1000, seed=1, profile='dos', insns_per_tick=None):
         if len(com) > 0xFF00:
             raise ValueError('a .COM program must fit in 64 KB minus PSP and stack')
         self.seg = seg
         self.com = bytes(com)
-        self.insns = 0                  # instructions executed so far ("time")
+        self.insns = 0  # instructions executed so far ("time")
         self.insns_per_tick = insns_per_tick or self.INSNS_PER_TICK
         self.keys = deque()
-        self.exited = None              # exit code once the program has ended
-        self.faulted = None             # unicorn error text if the CPU faulted
-        self.polls = 0                  # how many times the program has asked "is a key waiting?"
-        self.blocked = False            # waiting in a blocking key read with an empty queue
+        self.exited = None  # exit code once the program has ended
+        self.faulted = None  # unicorn error text if the CPU faulted
+        self.polls = 0  # how many times the program has asked "is a key waiting?"
+        self.blocked = False  # waiting in a blocking key read with an empty queue
         self.video_mode = 3
         self.cursor = [0, 0]
         self.last_scancode = 0
         self.out_log = []
         self._stop_at_poll = False
-        self._parked = False            # stopped in front of an INT that has not been served yet
-        self._resume_poll = False       # the next INT 16h is the one we parked at: serve it, do not stop again
+        self._parked = False  # stopped in front of an INT that has not been served yet
+        self._resume_poll = False  # the next INT 16h is the one we parked at: serve it, do not stop again
         self._pit = seed & 0xFFFF or 1  # xorshift state for port 0x40
-        self.pit_fn = None              # optional callable returning the byte IN 0x40 gives (tests use this to pick pieces)
-        self._tick_base = 0
+        self.pit_fn = None  # optional callable returning the byte IN 0x40 gives (tests use this to pick pieces)
 
         uc = self.uc = Uc(UC_ARCH_X86, UC_MODE_16)
         uc.mem_map(0, 0x100000)
@@ -81,12 +104,29 @@ class DosVM:
         uc.mem_write(self.base + 0x100, self.com)
         for r in (UC_X86_REG_CS, UC_X86_REG_DS, UC_X86_REG_ES, UC_X86_REG_SS):
             uc.reg_write(r, seg)
-        if profile == 'dos':            # what MS-DOS 5/6 and DOSBox hand to a .COM
-            regs = {UC_X86_REG_AX: 0, UC_X86_REG_BX: 0, UC_X86_REG_CX: 0x00FF, UC_X86_REG_DX: seg,
-                    UC_X86_REG_SI: 0x100, UC_X86_REG_DI: 0xFFFE, UC_X86_REG_BP: 0x091C}
-        elif profile == 'zeroed':       # nothing may be relied on: every general register is 0 (SP is still 0xFFFE)
-            regs = {r: 0 for r in (UC_X86_REG_AX, UC_X86_REG_BX, UC_X86_REG_CX, UC_X86_REG_DX,
-                                   UC_X86_REG_SI, UC_X86_REG_DI, UC_X86_REG_BP)}
+        if profile == 'dos':  # what MS-DOS 5/6 and DOSBox hand to a .COM
+            regs = {
+                UC_X86_REG_AX: 0,
+                UC_X86_REG_BX: 0,
+                UC_X86_REG_CX: 0x00FF,
+                UC_X86_REG_DX: seg,
+                UC_X86_REG_SI: 0x100,
+                UC_X86_REG_DI: 0xFFFE,
+                UC_X86_REG_BP: 0x091C,
+            }
+        elif profile == 'zeroed':  # nothing may be relied on: every general register is 0 (SP is still 0xFFFE)
+            regs = dict.fromkeys(
+                (
+                    UC_X86_REG_AX,
+                    UC_X86_REG_BX,
+                    UC_X86_REG_CX,
+                    UC_X86_REG_DX,
+                    UC_X86_REG_SI,
+                    UC_X86_REG_DI,
+                    UC_X86_REG_BP,
+                ),
+                0,
+            )
         else:
             raise ValueError(profile)
         for r, v in regs.items():
@@ -103,9 +143,9 @@ class DosVM:
     def _build_bda(self):
         uc = self.uc
         bda = 0x400
-        uc.mem_write(bda + 0x10, (0x0021).to_bytes(2, 'little'))      # equipment: colour adapter
+        uc.mem_write(bda + 0x10, (0x0021).to_bytes(2, 'little'))  # equipment: colour adapter
         uc.mem_write(bda + 0x13, (640).to_bytes(2, 'little'))
-        uc.mem_write(bda + 0x49, bytes([3]))                          # video mode 3
+        uc.mem_write(bda + 0x49, bytes([3]))  # video mode 3
         uc.mem_write(bda + 0x4A, (80).to_bytes(2, 'little'))
         uc.mem_write(bda + 0x84, bytes([24]))
         # text screen starts as the BIOS leaves it: spaces, light grey on black
@@ -113,7 +153,7 @@ class DosVM:
 
     def _build_psp(self, seg):
         psp = bytearray(0x100)
-        psp[0:2] = b'\xCD\x20'
+        psp[0:2] = b'\xcd\x20'
         psp[2:4] = (0x9FFF).to_bytes(2, 'little')
         psp[0x2C:0x2E] = (seg - 0x20 & 0xFFFF).to_bytes(2, 'little')
         psp[0x80] = 0
@@ -134,9 +174,6 @@ class DosVM:
     def read(self, off, n, seg=None):
         return bytes(self.uc.mem_read(((self.seg if seg is None else seg) << 4) + off, n))
 
-    def read_word(self, off, seg=None):
-        return int.from_bytes(self.read(off, 2, seg), 'little')
-
     def vram(self):
         return bytes(self.uc.mem_read(0xB8000, 80 * 25 * 2))
 
@@ -146,7 +183,7 @@ class DosVM:
         return [[(v[(y * 80 + x) * 2], v[(y * 80 + x) * 2 + 1]) for x in range(80)] for y in range(25)]
 
     def screen_text(self, blocks=None):
-        """The screen as text. `blocks` maps an attribute byte to a character for solid-colour cells (e.g. {0x44:'#'})."""
+        """The screen as text. `blocks` maps an attribute byte to a character for solid cells (e.g. {0x44:'#'})."""
         blocks = blocks or {}
         lines = []
         for row in self.screen():
@@ -193,9 +230,9 @@ class DosVM:
         if port == 0x60:
             return self.last_scancode
         if port == 0x61:
-            return self.ticks & 0x10 | 0x20          # bit 4 toggles with time (refresh), bit 5 = timer 2 output
+            return self.ticks & 0x10 | 0x20  # bit 4 toggles with time (refresh), bit 5 = timer 2 output
         if port == 0x3DA:
-            return (self.insns // 50) & 0x09         # retrace/display-enable bits wobble with time
+            return (self.insns // 50) & 0x09  # retrace/display-enable bits wobble with time
         return 0
 
     def _out_hook(self, uc, port, size, value, _):
@@ -207,12 +244,17 @@ class DosVM:
         so the services below ARE the BIOS and DOS."""
         ip = self.r(UC_X86_REG_IP)
         before = self.read(ip - 2, 2, self.r(UC_X86_REG_CS)) if ip >= 2 else b''
-        if before[:1] != b'\xCD' or before[1:2] != bytes([intno]):       # not a software INT: a real CPU exception
+        if before[:1] != b'\xcd' or before[1:2] != bytes([intno]):  # not a software INT: a real CPU exception
             self.faulted = f'CPU exception {intno} at {self.r(UC_X86_REG_CS):04X}:{ip:04X}'
             uc.emu_stop()
             return
-        if intno == 0x16 and self._stop_at_poll and not self._resume_poll and (self.r(UC_X86_REG_AX) >> 8) in (0x01, 0x11):
-            self.w(UC_X86_REG_IP, ip - 2)               # park in front of the INT; it is served when the run resumes
+        if (
+            intno == 0x16
+            and self._stop_at_poll
+            and not self._resume_poll
+            and (self.r(UC_X86_REG_AX) >> 8) in (0x01, 0x11)
+        ):
+            self.w(UC_X86_REG_IP, ip - 2)  # park in front of the INT; it is served when the run resumes
             self._parked = True
             uc.emu_stop()
             return
@@ -235,7 +277,7 @@ class DosVM:
         ah, al = ax >> 8, ax & 0xFF
         if intno == 0x16:
             self.polls += 1
-            if ah in (0x00, 0x10):                       # wait for a key
+            if ah in (0x00, 0x10):  # wait for a key
                 if self.keys:
                     k = self.keys.popleft()
                     self.last_scancode = k >> 8
@@ -243,7 +285,7 @@ class DosVM:
                 else:
                     self.polls -= 1
                     self._block()
-            elif ah in (0x01, 0x11):                     # is a key waiting?
+            elif ah in (0x01, 0x11):  # is a key waiting?
                 if self.keys:
                     self.w(UC_X86_REG_AX, self.keys[0])
                     self._set_zf(False)
@@ -275,7 +317,7 @@ class DosVM:
             uc.mem_write(0xB8000, b' \x07' * (80 * 25))
             self.cursor = [0, 0]
         elif ah == 0x02:
-            self.cursor = [self.r(UC_X86_REG_DX) & 0xFF, self.r(UC_X86_REG_DX) >> 8]      # col, row
+            self.cursor = [self.r(UC_X86_REG_DX) & 0xFF, self.r(UC_X86_REG_DX) >> 8]  # col, row
         elif ah == 0x03:
             self.w(UC_X86_REG_DX, self.cursor[1] << 8 | self.cursor[0])
             self.w(UC_X86_REG_CX, 0x0607)
@@ -291,7 +333,7 @@ class DosVM:
                 uc.mem_write(p, bytes([al]) if ah == 0x0A else bytes([al, bl]))
         elif ah == 0x0E:
             self._teletype(al)
-        elif ah == 0x06 and al == 0:                       # scroll up whole window = clear (the common use)
+        elif ah == 0x06 and al == 0:  # scroll up whole window = clear (the common use)
             bh = self.r(UC_X86_REG_BX) >> 8
             uc.mem_write(0xB8000, bytes([0x20, bh]) * 2000)
 
@@ -340,7 +382,7 @@ class DosVM:
         elif ah == 0x0B:
             self.w(UC_X86_REG_AX, (0x0B << 8) | (0xFF if self.keys else 0))
         elif ah == 0x2C:
-            t = self.ticks * 55 // 1000                      # milliseconds since "midnight"
+            t = self.ticks * 55 // 1000  # milliseconds since "midnight"
             cs = t // 10 % 100
             s = t // 1000 % 60
             m = t // 60000 % 60
@@ -360,7 +402,7 @@ class DosVM:
             return 'exited'
         self._stop_at_poll = stop_at_poll
         target = self.insns + max_insns
-        if self._parked:                                 # resuming in front of an INT: the test has had its chance to press keys
+        if self._parked:  # resuming in front of an INT: the test has had its chance to press keys
             self._parked = False
             self.blocked = False
             self._resume_poll = True
@@ -375,7 +417,7 @@ class DosVM:
                 return 'exited'
             if self.faulted:
                 return 'fault'
-            if self._parked:                             # cut short: the exact count is unknown, charge a nominal cost
+            if self._parked:  # cut short: the exact count is unknown, charge a nominal cost
                 self.insns += self.POLL_COST
                 self._write_tick()
                 return 'blocked' if self.blocked else 'poll'
@@ -398,6 +440,7 @@ class DosVM:
 
 def main(argv):
     import argparse
+
     p = argparse.ArgumentParser(description='run a .COM and show its screen')
     p.add_argument('com')
     p.add_argument('--frames', type=int, default=10, help='run this many frames (keyboard polls)')
@@ -405,7 +448,8 @@ def main(argv):
     p.add_argument('--blocks', default='', help='attribute:char pairs for solid cells, e.g. 0x44:# 0x77:.')
     p.add_argument('--seed', type=int, default=1)
     a = p.parse_args(argv)
-    vm = DosVM(open(a.com, 'rb').read(), seed=a.seed)
+    with open(a.com, 'rb') as f:
+        vm = DosVM(f.read(), seed=a.seed)
     vm.press(*a.keys.split())
     why = vm.frames(a.frames)
     blocks = {int(k, 0): v for k, v in (kv.split(':') for kv in a.blocks.split())}

@@ -3,6 +3,8 @@
 # make holder-bug  show what the holder's program does wrong (random keys; stores outside the text page)
 # make -j4 -Otarget robust   the same checks with zeroed registers, other load segments and seeds
 # make dosbox cross-check in the real DOSBox (needs dosbox, xdotool, Xvfb, ImageMagick)
+# make lint   style, dead code, security and spelling checks on the Python and the docs (ruff pylint vulture bandit
+#             codespell typos)
 NASM ?= nasm
 PY   ?= python3 -I
 COM    = build/microtris.com
@@ -54,6 +56,16 @@ robust-%: all
 
 dosbox: all
 	$(PY) tests/dosbox_check.py $(COM) microtris
+
+lint:
+	ruff check tests tools
+	ruff format --check tests tools
+	pylint --enable=all --disable=C,R,I,F,W0613 tests tools
+	pylint --disable=all --enable=duplicate-code --min-similarity-lines=6 tests tools
+	vulture tests tools
+	bandit -q -r tests tools --ini .bandit
+	codespell README.md RULES.md Makefile notes src tests tools ruff.toml
+	typos README.md RULES.md Makefile notes src tests tools ruff.toml
 
 clean:
 	rm -rf build

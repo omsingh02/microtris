@@ -7,6 +7,7 @@ Everything is deterministic: same program + same arguments = same verdict, on an
 How it works: a tracker follows the falling piece and the settled stack on the screen frame by frame. Whenever a
 piece lands, the board is compared with what the reference rules (tools/tetris_model.py) say it must be, including
 removal of full rows. A bot plays pieces to exercise this; scripted scenarios hit the 1-, 2-, 3- and 4-row clears."""
+
 import argparse
 import os
 import random
@@ -16,9 +17,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 sys.path.insert(0, HERE)
-from dosvm import DosVM                                                      # noqa: E402
-from tetris_model import BASE, W, classify, land, norm, orientations         # noqa: E402
-from adapters import ADAPTERS                                                # noqa: E402
+from adapters import ADAPTERS  # noqa: E402
+from dosvm import DosVM  # noqa: E402
+from tetris_model import BASE, W, classify, land, norm, orientations  # noqa: E402
 
 
 class Fail(Exception):
@@ -26,7 +27,7 @@ class Fail(Exception):
 
 
 class Stopped(Fail):
-    """The program stopped asking for keys (a freeze, an exit, a fault). Whether that is a failure depends on the stack."""
+    """The program stopped asking for keys (a freeze, an exit, a fault). Whether that fails depends on the stack."""
 
 
 def cells_of(well):
@@ -35,8 +36,10 @@ def cells_of(well):
 
 def picture(cells, rows, mark=None):
     mark = mark or set()
-    return '\n'.join(f'{r:2} ' + ''.join('@' if (r, c) in mark else '#' if (r, c) in cells else '.' for c in range(W))
-                     for r in range(rows))
+    return '\n'.join(
+        f'{r:2} ' + ''.join('@' if (r, c) in mark else '#' if (r, c) in cells else '.' for c in range(W))
+        for r in range(rows)
+    )
 
 
 def indent(text):
@@ -49,16 +52,18 @@ class Game:
 
     def __init__(self, com, adapter, seed=1, byte=None, profile='dos', seg=0x1000, machine=None):
         self.ad = adapter
-        self.vm = machine or DosVM(com, seed=seed, profile=profile, seg=seg)   # any object with press(), frame(), screen()
-        self.byte = byte                                    # None: the machine's own pseudo-random stream
+        self.vm = machine or DosVM(
+            com, seed=seed, profile=profile, seg=seg
+        )  # any object with press(), frame(), screen()
+        self.byte = byte  # None: the machine's own pseudo-random stream
         if byte is not None:
             self.vm.pit_fn = lambda: self.byte
         self.settled, self.piece, self.cls = set(), None, None
-        self._raw = None                                    # the last screen, as bytes: a frame that changed nothing needs no decoding
+        self._raw = None  # the last screen, as bytes: a frame that changed nothing needs no decoding
         self.frames = 0
-        self.cleared = []                                   # rows cleared by each landing, in order
+        self.cleared = []  # rows cleared by each landing, in order
         self.last_event = None
-        self.step()                                         # run to the first frame: the first piece is there
+        self.step()  # run to the first frame: the first piece is there
 
     def cells(self):
         return cells_of(self.ad.well(self.vm))
@@ -83,37 +88,44 @@ class Game:
         self.vm.press(*keys)
         why = self.vm.frame()
         if why != 'poll':
-            raise Stopped(f'the program stopped ({why}; exited={self.vm.exited}; fault={self.vm.faulted}) after {self.frames} frames')
+            raise Stopped(
+                f'the program stopped ({why}; exited={self.vm.exited}; fault={self.vm.faulted}) '
+                f'after {self.frames} frames'
+            )
         self.frames += 1
         raw = bytes(self.vm.vram()) if hasattr(self.vm, 'vram') else None
         if raw is not None and raw == self._raw and self.piece is not None:
             self.last_event = 'move'
             return 'move'
         self._raw = raw
-        C = self.cells()
+        shown = self.cells()
         if self.piece is None:
-            cls = classify(C)
+            cls = classify(shown)
             if cls is None:
-                raise Fail(f'the first frame is not one tetromino:\n{picture(C, self.ad.rows)}')
-            self.piece, self.cls = C, cls
+                raise Fail(f'the first frame is not one tetromino:\n{picture(shown, self.ad.rows)}')
+            self.piece, self.cls = shown, cls
             self.last_event = 'spawn'
             return 'spawn'
-        D = C - self.settled
-        if self.settled <= C and len(D) == 4 and classify(D) == self.cls:
-            self.piece = D
+        fresh = shown - self.settled
+        if self.settled <= shown and len(fresh) == 4 and classify(fresh) == self.cls:
+            self.piece = fresh
             self.last_event = 'move'
             return 'move'
         expect, n = land(self.settled, self.piece, self.ad.rows)
-        extra = C - expect
-        if expect <= C and classify(extra) is not None:
+        extra = shown - expect
+        if expect <= shown and classify(extra) is not None:
             self.settled, self.piece, self.cls = expect, extra, classify(extra)
             self.cleared.append(n)
             self.last_event = ('land', n)
             return self.last_event
-        raise Fail('the board is not what the rules give.\n'
-                   f'  before (the falling piece marked @):\n{indent(picture(self.settled | self.piece, self.ad.rows, self.piece))}\n'
-                   f'  rules say, once the piece has landed and full rows have gone:\n{indent(picture(expect, self.ad.rows))}\n'
-                   f'  the screen shows:\n{indent(picture(C, self.ad.rows))}')
+        raise Fail(
+            'the board is not what the rules give.\n'
+            '  before (the falling piece marked @):\n'
+            f'{indent(picture(self.settled | self.piece, self.ad.rows, self.piece))}\n'
+            '  rules say, once the piece has landed and full rows have gone:\n'
+            f'{indent(picture(expect, self.ad.rows))}\n'
+            f'  the screen shows:\n{indent(picture(shown, self.ad.rows))}'
+        )
 
     def run_until_landing(self, limit=4000):
         for _ in range(limit):
@@ -151,7 +163,7 @@ def move_to(game, col, limit=40):
 
 
 def place(game, want, col):
-    """Orient the falling piece, slide it to `col`, then let it fall with no keys. Returns the rows the landing cleared."""
+    """Orient the falling piece, slide it to `col`, then let it fall with no keys. Returns the rows it cleared."""
     if not rotate_to(game, want):
         raise Fail(f'could not rotate the {game.cls} piece into {sorted(want)}')
     if not move_to(game, col):
@@ -206,8 +218,8 @@ def bot_choice(settled, cls, rows, rng, explore):
         w = max(c for _, c in o) + 1
         for col in range(W - w + 1):
             piece = {(r, c + col) for r, c in o}
-            S2, n = land(settled, piece, rows)
-            options.append((bot_score(S2, n, rows) + rng.random() * 1e-6, oi, col))
+            after, n = land(settled, piece, rows)
+            options.append((bot_score(after, n, rows) + rng.random() * 1e-6, oi, col))
     if rng.random() < explore and height(settled, rows) < 8:
         return rng.choice(options)[1:]
     return max(options)[1:]
@@ -217,7 +229,7 @@ def bot_choice(settled, cls, rows, rng, explore):
 class Ctx:
     def __init__(self, com, ad, seed, pieces_to_play, seg=0x1000, profile='dos'):
         self.com, self.ad, self.seed, self.n, self.seg, self.profile = com, ad, seed, pieces_to_play, seg, profile
-        self.pieces = {}                                    # piece name -> a PIT byte that makes the program spawn it
+        self.pieces = {}  # piece name -> a PIT byte that makes the program spawn it
         self.spawned = {}
 
 
@@ -268,7 +280,9 @@ def check_movement(ctx):
                     raise Fail(f'{cls}: landed while pressing {name}')
             edge = g.minc() if name == 'left' else g.maxc()
             if edge != edge_col:
-                raise Fail(f'{cls}: after 16 presses of {name} the piece spans columns {g.minc()}..{g.maxc()}, not the wall')
+                raise Fail(
+                    f'{cls}: after 16 presses of {name} the piece spans columns {g.minc()}..{g.maxc()}, not the wall'
+                )
     # a tower of three O pieces on the left; an O piece slid into it from the right must stop beside it
     g, _ = play(ctx, [('O', 0, 0)] * 3, then='O')
     tower = {(r, c) for r in range(ctx.ad.rows - 6, ctx.ad.rows) for c in (0, 1)}
@@ -292,7 +306,7 @@ def check_movement(ctx):
 
 
 def check_rotation(ctx):
-    """4. Rotation: 4 presses return the shape, a piece keeps its shape and stays in the well at the walls and beside blocks."""
+    """4. Rotation: 4 presses return the shape; a piece keeps its shape and stays in the well at walls and blocks."""
     for cls, b in sorted(ctx.pieces.items()):
         g = Game(ctx.com, ctx.ad, byte=b, seg=ctx.seg, profile=ctx.profile)
         shapes = [norm(g.piece)]
@@ -303,16 +317,18 @@ def check_rotation(ctx):
             shapes.append(norm(g.piece))
         want = len(orientations(BASE[cls]))
         if shapes[0] != shapes[4] or len(set(shapes)) != want:
-            raise Fail(f'{cls}: 4 rotations gave {len(set(shapes))} distinct shapes and '
-                       f'{"" if shapes[0] == shapes[4] else "did not "}came back; a {cls} has {want}')
+            raise Fail(
+                f'{cls}: 4 rotations gave {len(set(shapes))} distinct shapes and '
+                f'{"" if shapes[0] == shapes[4] else "did not "}came back; a {cls} has {want}'
+            )
         for key, side in ((g.ad.left, 'left'), (g.ad.right, 'right')):
             for _ in range(12):
                 g.step(key)
             for _ in range(5):
-                g.step(g.ad.rotate)                          # the tracker fails if cells are lost or the shape changes
+                g.step(g.ad.rotate)  # the tracker fails if cells are lost or the shape changes
                 if g.landed():
                     break
-                if not 0 <= g.minc() and g.maxc() < W:
+                if not g.minc() >= 0 and g.maxc() < W:
                     raise Fail(f'{cls}: rotating at the {side} wall pushed the piece out of the well')
     # beside settled blocks: two vertical I pieces at column 0, then rotate every piece in the gap next to them
     for cls in sorted(ctx.pieces):
@@ -330,41 +346,44 @@ def check_rotation(ctx):
             g.step(g.ad.left)
             if g.landed():
                 break
-    return 'every piece has the right number of orientations; 4 presses return to the start; rotating at both walls and beside a settled stack never loses or moves cells into blocks'
+    return (
+        'every piece has the right number of orientations; 4 presses return to the start; rotating at both walls '
+        'and beside a settled stack never loses or moves cells into blocks'
+    )
 
 
 def check_line_clearing(ctx):
-    """5. Line clearing: scripted 1-, 2-, 3-, 4-row clears; then a bot plays pieces and every landing is judged by the rules."""
-    R = ctx.ad.rows
+    """5. Line clearing: scripted 1-, 2-, 3-, 4-row clears; then a bot plays and every landing is judged."""
+    rows = ctx.ad.rows
     # 1 row: I I and an O along the bottom; the O's top half is left, and falls one row
     g, cl = play(ctx, [('I', 0, 0), ('I', 0, 4), ('O', 0, 8)])
-    if cl[-1] != 1 or g.settled != {(R - 1, 8), (R - 1, 9)}:
-        raise Fail(f'1 row: cleared {cl}, board:\n{picture(g.settled, R)}')
+    if cl[-1] != 1 or g.settled != {(rows - 1, 8), (rows - 1, 9)}:
+        raise Fail(f'1 row: cleared {cl}, board:\n{picture(g.settled, rows)}')
     # 2 rows: five O pieces side by side
     g, cl = play(ctx, [('O', 0, c) for c in (0, 2, 4, 6, 8)])
     if cl[-1] != 2 or g.settled:
-        raise Fail(f'2 rows: cleared {cl}, board:\n{picture(g.settled, R)}')
+        raise Fail(f'2 rows: cleared {cl}, board:\n{picture(g.settled, rows)}')
     # 3 rows: four O (two rows), two flat I on top (third row), two upright I fill the gap and stick up one row
     g, cl = play(ctx, [('O', 0, c) for c in (0, 2, 4, 6)] + [('I', 0, 0), ('I', 0, 4), ('I', 1, 8), ('I', 1, 9)])
-    if cl[-1] != 3 or g.settled != {(R - 1, 8), (R - 1, 9)}:
-        raise Fail(f'3 rows: cleared {cl}, board:\n{picture(g.settled, R)}')
+    if cl[-1] != 3 or g.settled != {(rows - 1, 8), (rows - 1, 9)}:
+        raise Fail(f'3 rows: cleared {cl}, board:\n{picture(g.settled, rows)}')
     # 4 rows: ten upright I pieces side by side
     g, cl = play(ctx, [('I', 1, c) for c in range(10)])
     if cl[-1] != 4 or g.settled:
-        raise Fail(f'4 rows: cleared {cl}, board:\n{picture(g.settled, R)}')
+        raise Fail(f'4 rows: cleared {cl}, board:\n{picture(g.settled, rows)}')
     # the bot. It plays to the program's own game over and then starts the program again; every landing is judged.
     rng = random.Random(ctx.seed)
-    hist, topped = {k: 0 for k in range(5)}, 0
+    hist, topped = dict.fromkeys(range(5), 0), 0
     g = Game(ctx.com, ctx.ad, byte=ctx.pieces[rng.choice(sorted(ctx.pieces))], seg=ctx.seg, profile=ctx.profile)
-    for i in range(ctx.n):
-        oi, col = bot_choice(g.settled, g.cls, R, rng, explore=0.25)
+    for _ in range(ctx.n):
+        oi, col = bot_choice(g.settled, g.cls, rows, rng, explore=0.25)
         g.byte = ctx.pieces[rng.choice(sorted(ctx.pieces))]
         try:
             place(g, orientations(BASE[g.cls])[oi], col)
         except Stopped as e:
-            if height(g.settled, R) < R - 4 or g.vm.faulted:
-                raise Fail(f'{e}, with the stack only {height(g.settled, R)} rows high')
-            topped += 1                                      # the stack reached the top: that is game over, not a failure
+            if height(g.settled, rows) < rows - 4 or g.vm.faulted:
+                raise Fail(f'{e}, with the stack only {height(g.settled, rows)} rows high') from e
+            topped += 1  # the stack reached the top: that is game over, not a failure
             for k in range(5):
                 hist[k] += g.cleared.count(k)
             g = Game(ctx.com, ctx.ad, byte=ctx.pieces[rng.choice(sorted(ctx.pieces))], seg=ctx.seg, profile=ctx.profile)
@@ -373,22 +392,24 @@ def check_line_clearing(ctx):
     for k in (1, 2):
         if not hist[k]:
             raise Fail(f'the bot never saw a {k}-row clear in {ctx.n} pieces (histogram {hist}); raise --pieces')
-    return (f'scripted 1-, 2-, 3- and 4-row clears right; then {sum(hist.values())} bot-played landings all matched the rules '
-            f'(rows cleared per landing: {hist}; the bot topped out {topped}x and the program was started again)')
+    return (
+        f'scripted 1-, 2-, 3- and 4-row clears right; then {sum(hist.values())} bot-played landings matched the rules '
+        f'(rows cleared per landing: {hist}; the bot topped out {topped}x and the program was started again)'
+    )
 
 
 def game_over_once(ctx, cls):
-    """Fill the well with pieces of one kind (cls None: the machine's own random stream) until the program stops playing."""
+    """Fill the well with pieces of one kind (cls None: the machine's own random stream) until play stops."""
     vm = DosVM(ctx.com, seg=ctx.seg, profile=ctx.profile)
     if cls is not None:
         vm.pit_fn = lambda: ctx.pieces[cls]
     tallest, last = 0, None
-    for i in range(60000):
+    for _ in range(60000):
         why = vm.frame()
         if why != 'poll':
             break
         raw = bytes(vm.vram())
-        if raw != last:                                      # decode only when the screen changed
+        if raw != last:  # decode only when the screen changed
             last = raw
             tallest = max(tallest, height(cells_of(ctx.ad.well(vm)), ctx.ad.rows))
     else:
@@ -409,13 +430,16 @@ def game_over_once(ctx, cls):
 
 
 def check_game_over(ctx):
-    """6. Game over: when the stack reaches the top the program ends play cleanly (freeze, exit or restart); no fault, no garbage."""
+    """6. Game over: a stack that reaches the top ends play cleanly (freeze, exit or restart); no fault, no garbage."""
     outcomes = {}
-    for cls in [None] + sorted(ctx.pieces):
+    for cls in [None, *sorted(ctx.pieces)]:
         state, tallest = game_over_once(ctx, cls)
         outcomes.setdefault(state, []).append(cls or 'random')
     detail = '; '.join(f'{state}: {" ".join(kinds)}' for state, kinds in outcomes.items())
-    return f'filled with each piece kind and with random pieces, the stack reached the top ({tallest} rows) and the program {detail}; no CPU fault'
+    return (
+        f'filled with each piece kind and with random pieces, the stack reached the top ({tallest} rows) '
+        f'and the program {detail}; no CPU fault'
+    )
 
 
 CHECKS = [check_pieces, check_gravity, check_movement, check_rotation, check_line_clearing, check_game_over]
@@ -428,11 +452,16 @@ def main(argv):
     p.add_argument('--pieces', type=int, default=200, help='bot-played pieces in check 5')
     p.add_argument('--seed', type=int, default=1)
     p.add_argument('--seg', type=lambda s: int(s, 0), default=0x1000, help='segment the program is loaded at')
-    p.add_argument('--profile', default='dos', choices=['dos', 'zeroed'],
-                   help="registers at entry: what DOS gives a .COM, or every general register 0")
+    p.add_argument(
+        '--profile',
+        default='dos',
+        choices=['dos', 'zeroed'],
+        help="registers at entry: what DOS gives a .COM, or every general register 0",
+    )
     p.add_argument('--only', default='', help='comma separated check numbers, e.g. 1,3')
     a = p.parse_args(argv)
-    com = open(a.com, 'rb').read()
+    with open(a.com, 'rb') as f:
+        com = f.read()
     ctx = Ctx(com, ADAPTERS[a.adapter], a.seed, a.pieces, a.seg, a.profile)
     print(f'{a.com}: {len(com)} bytes, adapter {a.adapter}, seed {a.seed}, load segment {a.seg:04X}')
     t0 = time.time()
@@ -445,11 +474,13 @@ def main(argv):
         t = time.time()
         try:
             note = check(ctx)
-            print(f'  PASS {i}. {check.__doc__.split(".", 1)[1].split(":")[0].strip() if False else check.__doc__.splitlines()[0][3:]}\n         {note}  [{time.time() - t:.1f}s]')
+            print(f'  PASS {i}. {check.__doc__.splitlines()[0][3:]}\n         {note}  [{time.time() - t:.1f}s]')
         except Fail as e:
             failed += 1
             print(f'  FAIL {i}. {check.__doc__.splitlines()[0][3:]}\n         {e}  [{time.time() - t:.1f}s]')
-    print(f'{"ALL SIX FEATURES VERIFIED" if not failed and not only else "done"}: {len(CHECKS) - failed - (len(CHECKS) - len(only) if only else 0)} passed, {failed} failed, {time.time() - t0:.0f}s')
+    ran = len(only) if only else len(CHECKS)
+    verdict = 'ALL SIX FEATURES VERIFIED' if not failed and not only else 'done'
+    print(f'{verdict}: {ran - failed} passed, {failed} failed, {time.time() - t0:.0f}s')
     return 1 if failed else 0
 
 

@@ -10,11 +10,14 @@ Two passes, because a static listing alone can be fooled by self-modifying code 
         80186  PUSHA POPA BOUND PUSH imm IMUL r,rm,imm INS/OUTS shift/rotate by imm8 ENTER LEAVE
         286+   an 0F escape (on the 8086 that byte is POP CS)
         386+   an operand-size / address-size / FS / GS prefix (and so 32-bit registers)
-  2. dynamic: run the program on the VM for a few thousand frames with random keys, hooking every basic block it enters and
-     every store into its own code, so that (a) every block starts on an instruction the static pass found, inside the
-     code and not in the data, and (b) the instruction bytes written by self-modifying code are classified too.
-It also lists the undocumented-but-universal opcodes it finds (AAM/AAD with a base other than 10), which behave the same on
-every Intel and AMD part but not on the NEC V20/V30. Exit status 1 if anything needs more than --max (default 186)."""
+  2. dynamic: run the program on the VM for a few thousand frames with random keys, hooking every basic block it
+     enters and every store into its own code, so that (a) every block starts on an instruction the static pass
+     found, inside the code and not in the data, and (b) the instruction bytes written by self-modifying code are
+     classified too.
+It also lists the undocumented-but-universal opcodes it finds (AAM/AAD with a base other than 10), which behave the
+same on every Intel and AMD part but not on the NEC V20/V30. Exit status 1 if anything needs more than --max
+(default 186)."""
+
 import argparse
 import os
 import random
@@ -22,12 +25,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from capstone import Cs, CS_ARCH_X86, CS_MODE_16                                  # noqa: E402
-from unicorn import UC_HOOK_BLOCK, UC_HOOK_MEM_WRITE                              # noqa: E402
-from dosvm import DosVM                                                           # noqa: E402
+from capstone import CS_ARCH_X86, CS_MODE_16, Cs  # noqa: E402
+from dosvm import DosVM  # noqa: E402
+from unicorn import UC_HOOK_BLOCK, UC_HOOK_MEM_WRITE  # noqa: E402
 
 NAMES = {86: '8086', 186: '80186', 286: '80286+', 386: '80386+'}
-PREFIX_86 = {0x26, 0x2E, 0x36, 0x3E, 0xF0, 0xF2, 0xF3}                            # ES CS SS DS LOCK REPNE REP
+PREFIX_86 = {0x26, 0x2E, 0x36, 0x3E, 0xF0, 0xF2, 0xF3}  # ES CS SS DS LOCK REPNE REP
 ONLY_186 = {0x60, 0x61, 0x62, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xC0, 0xC1, 0xC8, 0xC9}
 ORG = 0x100
 
@@ -45,7 +48,11 @@ def generation(raw):
     if op in ONLY_186:
         return 186, ''
     if op in (0xD4, 0xD5) and raw[i + 1] != 10:
-        return 86, f'{"AAM" if op == 0xD4 else "AAD"} with base {raw[i + 1]}: undocumented, same on Intel/AMD, base fixed at 10 on NEC V20/V30'
+        return (
+            86,
+            f'{"AAM" if op == 0xD4 else "AAD"} with base {raw[i + 1]}: undocumented, same on Intel/AMD, '
+            'base fixed at 10 on NEC V20/V30',
+        )
     return 86, ''
 
 
@@ -65,22 +72,24 @@ def main(argv):
     a = p.parse_args(argv)
     with open(a.com, 'rb') as f:
         com = f.read()
-    code = com[:len(com) - a.data]
+    code = com[: len(com) - a.data]
     md = Cs(CS_ARCH_X86, CS_MODE_16)
 
     # ---- 1. static
     listing = {}
     off = 0
     while off < len(code):
-        insn = next(md.disasm(code[off:off + 16], ORG + off), None)
+        insn = next(md.disasm(code[off : off + 16], ORG + off), None)
         if insn is None:
-            raise SystemExit(f'{a.com}: the bytes at {ORG + off:#x} are not an instruction ({code[off:off + 4].hex()})')
+            raise SystemExit(
+                f'{a.com}: the bytes at {ORG + off:#x} are not an instruction ({code[off : off + 4].hex()})'
+            )
         if off + insn.size > len(code):
             raise SystemExit(f'{a.com}: the last instruction runs into the data at {ORG + off:#x}; check --data')
         listing[ORG + off] = (insn.size, insn.mnemonic + ' ' + insn.op_str, bytes(insn.bytes))
         off += insn.size
     found, notes = {}, []
-    for addr, (size, text, raw) in listing.items():
+    for addr, (_, text, raw) in listing.items():
         g, note = generation(raw)
         found.setdefault(g, []).append((addr, text, raw))
         if note:
@@ -97,7 +106,7 @@ def main(argv):
             bad.append(ip)
             uc.emu_stop()
 
-    def store(uc, access, address, size, value, _):
+    def store(uc, _access, address, size, value, _):
         patched.add((address - base, size, value & ((1 << 8 * size) - 1)))
 
     vm.uc.hook_add(UC_HOOK_BLOCK, block)
@@ -110,8 +119,10 @@ def main(argv):
         if vm.frame() != 'poll' or bad:
             break
     if bad:
-        raise SystemExit(f'{a.com}: CPU entered {bad[0]:#x}, which is not the start of an instruction of the listing '
-                         f'(or is in the data)')
+        raise SystemExit(
+            f'{a.com}: CPU entered {bad[0]:#x}, which is not the start of an instruction of the listing '
+            f'(or is in the data)'
+        )
     if vm.faulted:
         raise SystemExit(f'{a.com}: the CPU faulted: {vm.faulted}')
     dynamic = []
@@ -120,7 +131,7 @@ def main(argv):
         if ip + size > start + listing[start][0]:
             raise SystemExit(f'{a.com}: a store at {ip:#x} reaches past the instruction at {start:#x}')
         raw = bytearray(listing[start][2])
-        raw[ip - start:ip - start + size] = value.to_bytes(size, 'little')
+        raw[ip - start : ip - start + size] = value.to_bytes(size, 'little')
         insn = classify(md, bytes(raw) + b'\x90' * 8, ORG + start)
         g, _ = generation(bytes(raw))
         dynamic.append((start, bytes(raw), g, insn.mnemonic + ' ' + insn.op_str))
@@ -136,10 +147,14 @@ def main(argv):
     for addr, text, note in notes:
         print(f'  note    {addr:#05x}  {text}: {note}')
     for start, img, g, text in dynamic:
-        print(f'  self-modified at {start:#05x}: the listing has {listing[start][2].hex()} ({listing[start][1]}), '
-              f'at run time {img.hex()} ({text}), {NAMES[g]}')
-    print(f'  dynamic: {a.frames} frames with random keys; every basic block starts on an instruction of the listing, '
-          f'none in the data')
+        print(
+            f'  self-modified at {start:#05x}: the listing has {listing[start][2].hex()} ({listing[start][1]}), '
+            f'at run time {img.hex()} ({text}), {NAMES[g]}'
+        )
+    print(
+        f'  dynamic: {a.frames} frames with random keys; every basic block starts on an instruction of the listing, '
+        f'none in the data'
+    )
     print(f'  => needs {NAMES[top]} (limit {NAMES[a.max]})')
     return 0 if top <= a.max else 1
 

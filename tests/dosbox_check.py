@@ -6,6 +6,7 @@
 A cross-check by a different implementation of the PC. Checks: a piece appears; gravity; it reaches both walls; it
 rotates (4 presses = back to the start); then a bot plays N pieces and every landing is compared with the reference
 rules, including full rows going. Not deterministic (real time, the program's own random pieces)."""
+
 import argparse
 import os
 import random
@@ -15,9 +16,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
-from features import BASE, Fail, Game, W, bot_choice, norm, orientations, picture, place    # noqa: E402
-from adapters import ADAPTERS                                                               # noqa: E402
-from dosbox_machine import DosboxMachine                                                    # noqa: E402
+from adapters import ADAPTERS  # noqa: E402
+from dosbox_machine import DosboxMachine  # noqa: E402
+from features import BASE, Fail, Game, W, bot_choice, norm, orientations, picture, place  # noqa: E402
 
 
 def phase_one(com, ad, cycles, wait):
@@ -25,7 +26,10 @@ def phase_one(com, ad, cycles, wait):
     m = DosboxMachine(com, cycles=cycles, wait=wait)
     try:
         g = Game(com, ad, machine=m)
-        print(f'DOSBox (cycles {cycles}): first piece is a {g.cls}, at rows {g.top()}..{g.bottom()}, columns {g.minc()}..{g.maxc()}')
+        print(
+            f'DOSBox (cycles {cycles}): first piece is a {g.cls}, at rows {g.top()}..{g.bottom()}, '
+            f'columns {g.minc()}..{g.maxc()}'
+        )
         start = g.top()
         for _ in range(60):
             g.step()
@@ -50,7 +54,10 @@ def phase_one(com, ad, cycles, wait):
                 raise Fail('the piece landed during the rotation test: use a smaller --slow-cycles')
             shapes.append(norm(g.piece))
         want = len(orientations(BASE[g.cls]))
-        print(f'DOSBox: rotation shows {len(set(shapes))} shapes for a {g.cls} (should be {want}); 4 presses back to start: {shapes[0] == shapes[4]}')
+        print(
+            f'DOSBox: rotation shows {len(set(shapes))} shapes for a {g.cls} (should be {want}); '
+            f'4 presses back to start: {shapes[0] == shapes[4]}'
+        )
         if len(set(shapes)) != want or shapes[0] != shapes[4]:
             raise Fail('rotation is wrong')
     finally:
@@ -68,7 +75,10 @@ def phase_two(com, ad, cycles, wait, pieces, seed):
             oi, col = bot_choice(g.settled, g.cls, ad.rows, rng, explore=0.1)
             place(g, orientations(BASE[g.cls])[oi], col)
         hist = {k: g.cleared.count(k) for k in range(5)}
-        print(f'DOSBox (cycles {cycles}): {pieces} bot-placed pieces, every landing matched the rules; rows cleared per landing {hist}')
+        print(
+            f'DOSBox (cycles {cycles}): {pieces} bot-placed pieces, every landing matched the rules; '
+            f'rows cleared per landing {hist}'
+        )
         print(picture(g.settled | g.piece, ad.rows, g.piece))
     finally:
         m.close()

@@ -1,0 +1,12 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "N"]
+ignore = [
+    "N818",   # Fail / Exited are verdicts, not errors; the name says what happened
+    "RUF001", # the docstrings use plain ASCII, the few exceptions are deliberate
+]
+
+[format]
+quote-style = "preserve"

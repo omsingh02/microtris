@@ -1,0 +1,4 @@
+[bandit]
+# asserts and seeded random are intended in a test harness; the harness starts Xvfb, dosbox, xdotool and import from PATH
+# with fixed argument lists and no shell (B404/B603/B607); /tmp/.X11-unix is where X servers keep their sockets (B108)
+skips: B101,B108,B311,B404,B603,B607

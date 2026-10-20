@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 """fuzz.py - random key presses against a running program, every frame judged from the screen.
 
-    python3 -I tests/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N] [--profile dos|zeroed] [--seg 0xNNNN]
+    python3 -I tests/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N]
+                             [--profile dos|zeroed] [--seg 0xNNNN]
 
 Extra evidence, not one of the six features: the six checks are scripted, this one throws j/k/l (and a few other keys)
 at the program in random order, on random stacks, and after every single frame requires that
@@ -12,6 +13,7 @@ at the program in random order, on random stacks, and after every single frame r
   * any other key changes nothing,
   * a landing agrees with the reference rules (the tracker in features.py does this).
 A run ends when the stack gets high; the next run starts the program again with another random stream."""
+
 import argparse
 import os
 import random
@@ -21,9 +23,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 sys.path.insert(0, HERE)
-from features import Fail, Game, height, picture                             # noqa: E402
-from tetris_model import W, norm, rotate_cw                                  # noqa: E402
-from adapters import ADAPTERS                                                # noqa: E402
+from adapters import ADAPTERS  # noqa: E402
+from features import Fail, Game, height, picture  # noqa: E402
+from tetris_model import W, norm, rotate_cw  # noqa: E402
 
 OTHER_KEYS = ['x', 'a', 'space', 'J', 'm', 'left', 'right', 'up', 'down', 'enter', 'esc', '1']
 
@@ -39,11 +41,20 @@ def blocked(cells, settled, rows):
 def one_run(com, ad, seed, steps, profile, seg, spin):
     rng = random.Random(seed)
     g = Game(com, ad, seed=seed, profile=profile, seg=seg)
-    counts = {'left': 0, 'right': 0, 'left blocked': 0, 'right blocked': 0, 'rotate': 0, 'rotate blocked': 0,
-              'other': 0, 'landings': 0, 'frames': 0}
+    counts = {
+        'left': 0,
+        'right': 0,
+        'left blocked': 0,
+        'right blocked': 0,
+        'rotate': 0,
+        'rotate blocked': 0,
+        'other': 0,
+        'landings': 0,
+        'frames': 0,
+    }
 
     def judge(key, press):
-        """One frame with `press` (or none); True when the stack has got high. Raises Fail on anything the rules do not allow."""
+        """One frame with `press` (or none); True when the stack has got high. Raises Fail on a rule violation."""
         nonlocal spin
         prev, settled = g.piece, g.settled
         ev = g.step(*([press] if press else []))
@@ -52,7 +63,7 @@ def one_run(com, ad, seed, steps, profile, seg, spin):
             counts['landings'] += 1
             return height(g.settled, ad.rows) >= 17
         new = g.piece
-        for dr in (0, 1):                                    # gravity may have dropped it one row in the same frame
+        for dr in (0, 1):  # gravity may have dropped it one row in the same frame
             if key in ('left', 'right'):
                 dc = 1 if key == 'right' else -1
                 if new == shifted(prev, dr, dc):
@@ -60,15 +71,22 @@ def one_run(com, ad, seed, steps, profile, seg, spin):
                     return False
                 if new == shifted(prev, dr, 0):
                     if not blocked(shifted(prev, dr, dc), settled, ad.rows):
-                        raise Fail(f'seed {seed}: {key} was refused with room to move\n{picture(settled | prev, ad.rows, prev)}')
+                        raise Fail(
+                            f'seed {seed}: {key} was refused with room to move\n'
+                            f'{picture(settled | prev, ad.rows, prev)}'
+                        )
                     counts[key + ' blocked'] += 1
                     return False
             elif key == 'rotate':
                 if new == shifted(prev, dr, 0) or norm(new) == norm(prev):
                     counts['rotate blocked'] += 1
                     return False
-                turns = {t for t in ('cw', 'ccw') if norm(new) == (rotate_cw(norm(prev)) if t == 'cw' else
-                                                                    rotate_cw(rotate_cw(rotate_cw(norm(prev)))))}
+                turns = {
+                    t
+                    for t in ('cw', 'ccw')
+                    if norm(new)
+                    == (rotate_cw(norm(prev)) if t == 'cw' else rotate_cw(rotate_cw(rotate_cw(norm(prev)))))
+                }
                 if turns:
                     spin &= turns
                     if not spin:
@@ -79,15 +97,21 @@ def one_run(com, ad, seed, steps, profile, seg, spin):
                 if new == shifted(prev, dr, 0):
                     counts['other'] += key == 'other'
                     return False
-        raise Fail(f'seed {seed}: after {key!r} ({press!r}) the piece went from\n'
-                   f'{picture(settled | prev, ad.rows, prev)}\nto\n{picture(g.settled | new, ad.rows, new)}')
+        raise Fail(
+            f'seed {seed}: after {key!r} ({press!r}) the piece went from\n'
+            f'{picture(settled | prev, ad.rows, prev)}\nto\n{picture(g.settled | new, ad.rows, new)}'
+        )
 
     for _ in range(steps):
         key = rng.choices(['left', 'right', 'rotate', None, 'other'], weights=[4, 4, 3, 3, 1])[0]
-        press = {'left': ad.left, 'right': ad.right, 'rotate': ad.rotate, None: None, 'other': rng.choice(OTHER_KEYS)}[key]
+        press = {'left': ad.left, 'right': ad.right, 'rotate': ad.rotate, None: None, 'other': rng.choice(OTHER_KEYS)}[
+            key
+        ]
         if judge(key, press):
             break
-        for _ in range(rng.choice([0, 0, 0, 0, 8, 32, 128])):      # the piece falls once per ~128 frames: let time pass between keys
+        for _ in range(
+            rng.choice([0, 0, 0, 0, 8, 32, 128])
+        ):  # the piece falls once per ~128 frames: let time pass between keys
             if judge(None, None):
                 return counts, spin
     return counts, spin
@@ -117,8 +141,11 @@ def main(argv):
     except Fail as e:
         print(f'{a.com}: FUZZ FAILED ({a.profile} registers, segment {a.seg:04X})\n{e}')
         return 1
-    print(f'{a.com}: {size} bytes, {a.runs} runs x up to {a.steps} key events, {a.profile} registers, segment {a.seg:04X}: '
-          f'every frame was one whole piece on the stack; {total}; rotation direction {sorted(spin)}  [{time.time() - t0:.0f}s]')
+    print(
+        f'{a.com}: {size} bytes, {a.runs} runs x up to {a.steps} key events, {a.profile} registers, '
+        f'segment {a.seg:04X}: every frame was one whole piece on the stack; {total}; '
+        f'rotation direction {sorted(spin)}  [{time.time() - t0:.0f}s]'
+    )
     return 0
 
 

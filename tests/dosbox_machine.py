@@ -5,6 +5,7 @@ with xdotool and reads the screen back from screenshots (ImageMagick `import`, d
 small interface the tests use on the deterministic VM: press(), frame(), screen().
 
 Not deterministic (real time), so it is a cross-check of behaviour, not a replacement for the VM tests."""
+
 import io
 import os
 import shutil
@@ -53,25 +54,35 @@ def _free_display():
 
 
 class DosboxMachine:
-    CELL = (9, 16)                                           # pixels per text cell in 80x25 mode
+    CELL = (9, 16)  # pixels per text cell in 80x25 mode
 
     def __init__(self, com_path, cycles=2000, wait=0.15):
         self.wait, self.polls = wait, 0
+        self.image = None
         self.dir = tempfile.mkdtemp(prefix='dosbox-')
         shutil.copy(com_path, os.path.join(self.dir, 'GAME.COM'))
-        with open(os.path.join(self.dir, 'db.conf'), 'w') as f:
+        with open(os.path.join(self.dir, 'db.conf'), 'w', encoding='utf-8') as f:
             f.write(CONF.format(cycles=cycles, dir=self.dir))
         n = _free_display()
         self.env = {k: v for k, v in os.environ.items() if k not in ('WAYLAND_DISPLAY', 'XDG_SESSION_TYPE')}
         self.env.update(DISPLAY=f':{n}', SDL_VIDEODRIVER='x11', SDL_AUDIODRIVER='dummy')
-        self.xvfb = subprocess.Popen(['Xvfb', f':{n}', '-screen', '0', '1024x768x24', '-nolisten', 'tcp'],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=self.env)
+        self.xvfb = subprocess.Popen(
+            ['Xvfb', f':{n}', '-screen', '0', '1024x768x24', '-nolisten', 'tcp'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=self.env,
+        )
         for _ in range(100):
             if os.path.exists(f'/tmp/.X11-unix/X{n}'):
                 break
             time.sleep(0.05)
-        self.dosbox = subprocess.Popen(['dosbox', '-conf', os.path.join(self.dir, 'db.conf'), '-c', 'GAME.COM'],
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=self.env, cwd=self.dir)
+        self.dosbox = subprocess.Popen(
+            ['dosbox', '-conf', os.path.join(self.dir, 'db.conf'), '-c', 'GAME.COM'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=self.env,
+            cwd=self.dir,
+        )
         self.wid = self._x(['xdotool', 'search', '--sync', '--onlyvisible', '--name', 'DOSBox']).split()[0]
         time.sleep(1.0)
         self.frame()
@@ -81,10 +92,12 @@ class DosboxMachine:
 
     def press(self, *names):
         for k in names:
-            self._x(['xdotool', 'key', '--window', self.wid, k])      # 'j', 'k', 'l' are the same names in xdotool
+            self._x(['xdotool', 'key', '--window', self.wid, k])  # 'j', 'k', 'l' are the same names in xdotool
 
     def _grab(self):
-        png = subprocess.run(['import', '-window', self.wid, 'png:-'], env=self.env, capture_output=True, check=True).stdout
+        png = subprocess.run(
+            ['import', '-window', self.wid, 'png:-'], env=self.env, capture_output=True, check=True
+        ).stdout
         self.image = Image.open(io.BytesIO(png)).convert('RGB')
         return self.screen()
 
@@ -108,8 +121,10 @@ class DosboxMachine:
             row = []
             for c in range(80):
                 px = self.image.getpixel((c * w + 1, r * h + 1))
-                bg = (px[0] > 140) << 6 | (px[1] > 140) << 5 | (px[2] > 140) << 4   # the three colour bits, as in an attribute
-                attr = bg | bg >> 4                                                  # (solid cells: foreground = background)
+                bg = (
+                    (px[0] > 140) << 6 | (px[1] > 140) << 5 | (px[2] > 140) << 4
+                )  # the three colour bits, as in an attribute
+                attr = bg | bg >> 4  # (solid cells: foreground = background)
                 row.append((0, attr))
             rows.append(row)
         return rows

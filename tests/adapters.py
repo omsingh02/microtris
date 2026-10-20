@@ -17,8 +17,9 @@ def _tinytris_well(vm):
 
 
 def _microtris_well(vm):
-    # 15 cells of two characters (bit 14 = left wall, bits 13..4 the well, bits 3..0 the right wall). A cell is empty when the background has the red bit (attribute bit 6, which the
-    # program takes from ZF), a block when it has not. Cell 0 is the left wall, cells 1..10 the well.
+    # 15 cells of two characters (bit 14 = left wall, bits 13..4 the well, bits 3..0 the right wall). A cell is empty
+    # when the background has the red bit (attribute bit 6, which the program takes from ZF), a block when it has not.
+    # Cell 0 is the left wall, cells 1..10 the well.
     scr = vm.screen()
     return [[not scr[r][2 * (1 + c)][1] & 0x40 for c in range(10)] for r in range(24)]
 

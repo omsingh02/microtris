@@ -1,7 +1,8 @@
-"""tetris_model.py - the rules of Tetris as plain Python sets of (row, col) cells: the reference the tests judge a program by."""
-W = 10                                  # well width every program is expected to have
+"""tetris_model.py - the rules of Tetris as plain Python sets of (row, col) cells: what the tests judge programs by."""
 
-BASE = {                                # one orientation of each tetromino, as (row, col)
+W = 10  # well width every program is expected to have
+
+BASE = {  # one orientation of each tetromino, as (row, col)
     'I': {(0, 0), (0, 1), (0, 2), (0, 3)},
     'O': {(0, 0), (0, 1), (1, 0), (1, 1)},
     'T': {(0, 0), (0, 1), (0, 2), (1, 1)},
@@ -33,7 +34,7 @@ def orientations(cells):
     return out
 
 
-CLASSES = {}                            # normalised orientation -> piece name
+CLASSES = {}  # normalised orientation -> piece name
 for _name, _cells in BASE.items():
     for _o in orientations(_cells):
         CLASSES[_o] = _name
