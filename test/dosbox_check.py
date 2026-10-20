@@ -1,11 +1,11 @@
 #!/usr/bin/python3
-"""dosbox_check.py - play the .COM in the real DOSBox and hold it to the same rules as the VM tests.
+"""dosbox_check.py - play the .COM in real DOSBox and hold it to the same rules as the VM tests.
 
     python3 -I test/dosbox_check.py <program.com> <adapter> [--pieces N] [--cycles N] [--slow-cycles N]
 
-A cross-check by a different implementation of the PC. Checks: a piece appears; gravity; it reaches both walls; it
-rotates (4 presses = back to the start); then a bot plays N pieces and every landing is compared with the reference
-rules, including full rows going. Not deterministic (real time, the program's own random pieces)."""
+A cross-check on a different implementation of the PC, and not deterministic. A piece appears and falls, reaches both
+walls and rotates (4 presses = back to the start); then a bot plays N pieces and every landing is compared with the
+reference rules."""
 
 import argparse
 import os

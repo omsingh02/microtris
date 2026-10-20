@@ -14,7 +14,7 @@
 BOARD_ROWS equ 0x18
 
 start:
-        xor di, di                  ; the board starts at offset 0: the first 50 bytes of the PSP (the word above it, 0xFFFE, is free)
+        xor di, di                  ; the board starts at offset 0: the first 50 bytes of the PSP
         mov ax, 0x400f              ; an empty row: walls only (bit 14 on the left, bits 3..0 on the right)
         mov cx, BOARD_ROWS
         repne stosw                 ; 24 rows; cx = 0 afterwards
@@ -26,7 +26,7 @@ start:
 
 next_piece:
         test si, si
-        js next_piece               ; game over: the piece landed on the row above the board (si = -2): stay here, board on screen
+        js next_piece               ; game over: the piece landed above the board (si = -2); stay here, board on screen
         ; ---- remove full rows (si = row pointer; first pass reads from the program itself)
 scan:   cmp word [si], 0x7fff
         ja pick                     ; reached the floor (0xFFFF > 0x7FFF): done
@@ -54,7 +54,7 @@ frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
         je .fits
         dec si                      ; (a collision: step back up a row)
         dec si
-.fits:  mov al, 0x31                ; opcode 'xor [si],ax': stamp the piece into the board (the cells are empty: xor = or)
+.fits:  mov al, 0x31                ; opcode 'xor [si],ax': stamp the piece (the cells are empty, so xor = or)
         call set_op
         pusha                       ; ---- draw the whole board: 25 rows x 15 cells x 2 columns
         xor si, si                  ; (si walks down the board)
@@ -62,7 +62,7 @@ frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
 .row:   xor al, al                  ; a blank character: only the background colour shows
         mov dx, 0x4000
 .cell:  test [si], dx
-        lahf                        ; the attribute comes from the flags: ZF (bit 6) = empty = red background, else black
+        lahf                        ; the attribute comes from the flags: ZF (bit 6) = empty = red, else black
         stosw
         stosw
         shr dx, 1
@@ -74,14 +74,14 @@ frame:  call test_piece             ; ZF=1 if the piece fits at si, cl
         popf
         jne next_piece              ; the piece collided: it has landed. next piece (and full rows go)
         call set_op                 ; (al is still 0x31) xor the piece out of the board again
-        add ch, 2                   ; gravity: every 128th pass the piece moves down a row (about the time the holder takes)
+        add ch, 2                   ; gravity: every 128th pass the piece moves down a row
         jae .nodrop
         lodsw
 .nodrop:
         mov ah, 1
         int 0x16
         jz frame                    ; no key: next pass
-        push cx                     ; a key: save cx/dx (a move that does not fit is taken back), handle it, back to 'frame'
+        push cx                     ; a key: save cx/dx (a move that does not fit is taken back), handle it
         push dx
         mov ax, di
         int 0x16

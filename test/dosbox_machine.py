@@ -1,10 +1,7 @@
-"""dosbox_machine.py - the real DOSBox as a test machine: a second, independent implementation of DOS and the PC.
+"""dosbox_machine.py - real DOSBox as a test machine, with the VM's interface: press(), frame(), screen().
 
-It starts a private X server (Xvfb) so nothing appears on your desktop, runs DOSBox on it, sends real key presses
-with xdotool and reads the screen back from screenshots (ImageMagick `import`, decoded with Pillow). It offers the same
-small interface the tests use on the deterministic VM: press(), frame(), screen().
-
-Not deterministic (real time), so it is a cross-check of behaviour, not a replacement for the VM tests."""
+A private Xvfb keeps it off your desktop; keys go in with xdotool and the screen is read back from screenshots
+(ImageMagick `import`, Pillow). Real time, so not deterministic."""
 
 import io
 import os

@@ -1,24 +1,14 @@
 #!/usr/bin/python3
-"""dosvm.py - run a DOS .COM program deterministically, one instruction at a time (python-unicorn).
+"""dosvm.py - run a DOS .COM deterministically, one instruction at a time (python-unicorn).
 
-Nothing here looks at a clock. "Time" is the number of instructions executed; the BIOS tick counter, the PIT
-counter and the keyboard are all functions of that count and of a script, so the same program with the same
-script always produces the same screen, on any machine.
+No clock anywhere: time is the instruction count, and the tick counter, the PIT and the keyboard are functions of it and
+of a script. Emulated: the .COM entry state, INT 10h, 16h, 1Ah, 20h and 21h as far as a tiny program uses them, text
+video memory at B800:0000, the BIOS data area, ports 0x40 (scripted), 0x60, 0x61 and 0x3DA. Interrupts are not
+delivered, so a program may poll but cannot install a handler.
 
-    vm = DosVM(open('x.com','rb').read())
-    vm.frame()                # run until the program next asks the keyboard "is a key waiting?" (once per frame)
-    vm.press('j'); vm.frame()
-    print(vm.screen_text())
+    vm = DosVM(com_bytes); vm.frame(); vm.press('j'); vm.frame(); print(vm.screen_text())
 
-What is emulated, and nothing more:
-  * the .COM entry state of DOS (PSP at offset 0, CS=DS=ES=SS, IP=0x100, SP=0xFFFE, and DOS's register values)
-  * INT 10h (set mode, cursor, teletype, write char), INT 16h (keyboard), INT 1Ah (tick count), INT 20h / 21h
-    (exit, print, keyboard, get time) - the services a tiny program uses
-  * text video memory at B800:0000, the BIOS data area (tick counter at 0040:006C)
-  * ports 0x40 (PIT counter, scripted pseudo-random), 0x60 (last scancode), 0x61, 0x3DA; everything else reads 0
-It does NOT emulate interrupts arriving (no IRQ0/IRQ1 delivery), so a program may poll the tick counter or the
-keyboard but cannot install its own handler and expect it to be called.
-"""
+frame() runs until the program next asks the keyboard whether a key is waiting."""
 
 import sys
 from collections import deque

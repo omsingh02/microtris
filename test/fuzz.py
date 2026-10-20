@@ -1,18 +1,12 @@
 #!/usr/bin/python3
-"""fuzz.py - random key presses against a running program, every frame judged from the screen.
+"""fuzz.py - random keys against a running program, every frame judged from the screen.
 
-    python3 -I test/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N]
-                             [--profile dos|zeroed] [--seg 0xNNNN]
+    python3 -I test/fuzz.py <program.com> <adapter> [--runs N] [--steps N] [--seed N] [--profile dos|zeroed]
+                             [--seg 0xNNNN]
 
-Extra evidence, not one of the six features: the six checks are scripted, this one throws j/k/l (and a few other keys)
-at the program in random order, on random stacks, and after every single frame requires that
-  * the screen is the settled stack plus exactly one whole tetromino (a piece that vanishes at a wall, loses a cell or
-    overlaps a block fails here),
-  * a sideways key moves the piece one column, or it does not move and then the move really was blocked (wall or block),
-  * rotation turns the piece the same way every time (or leaves it as it was),
-  * any other key changes nothing,
-  * a landing agrees with the reference rules (the tracker in features.py does this).
-A run ends when the stack gets high; the next run starts the program again with another random stream."""
+Extra evidence, not one of the six features. After every frame the screen must be the settled stack plus one whole
+tetromino; a sideways key moves one column or is really blocked; rotation always turns the same way; other keys change
+nothing; a landing agrees with the reference rules. A run ends when the stack gets high, then it starts again."""
 
 import argparse
 import os

@@ -1,22 +1,12 @@
 #!/usr/bin/python3
-"""cpu_level.py - the oldest x86 a .COM program can run on, read from its bytes and from a run.
+"""cpu_level.py - the oldest x86 a .COM can run on, read from its bytes and from a run.
 
     python3 -I test/cpu_level.py <program.com> [--data N] [--max 186]
 
-Two passes, because a static listing alone can be fooled by self-modifying code and by data inside the code:
-  1. static: disassemble from 0x100 to the end of the code (the last N bytes of the file are data, default 7: the piece
-     table) with capstone in 16-bit mode and put every instruction into a generation by its opcode bytes:
-        8086   everything else (with the 8086's own prefixes)
-        80186  PUSHA POPA BOUND PUSH imm IMUL r,rm,imm INS/OUTS shift/rotate by imm8 ENTER LEAVE
-        286+   an 0F escape (on the 8086 that byte is POP CS)
-        386+   an operand-size / address-size / FS / GS prefix (and so 32-bit registers)
-  2. dynamic: run the program on the VM for a few thousand frames with random keys, hooking every basic block it
-     enters and every store into its own code, so that (a) every block starts on an instruction the static pass
-     found, inside the code and not in the data, and (b) the instruction bytes written by self-modifying code are
-     classified too.
-It also lists the undocumented-but-universal opcodes it finds (AAM/AAD with a base other than 10), which behave the
-same on every Intel and AMD part but not on the NEC V20/V30. Exit status 1 if anything needs more than --max
-(default 186)."""
+Static: capstone over the code (the last N bytes are data, default 7), each instruction put in a generation by its
+bytes. Dynamic: a run on the VM with random keys, watching every basic block and every store into the code, so blocks
+must start on listed instructions and the self-modified opcode is classified too. Also lists AAM/AAD with a base other
+than 10 (the same on Intel and AMD, not on the NEC V20/V30). Exit 1 if anything needs more than --max."""
 
 import argparse
 import os

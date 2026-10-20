@@ -1,16 +1,12 @@
 #!/usr/bin/python3
-"""footprint.py - where does the program write? Every store the CPU makes outside the program's own segment is checked.
+"""footprint.py - where does the program write?
 
     python3 -I test/footprint.py <program.com> <adapter> [--seg 0xNNNN] [--profile dos|zeroed] [--frames N]
 
-Extra evidence, not one of the six features. The VM maps all 1 MB as RAM, so a program that scribbles over memory it
-does not own would still pass the six checks; this one would not. The program is played with random keys and idle
-stretches, then left alone until the stack reaches the top, then watched for a while after game over. Allowed:
-  * anywhere in its own segment (PSP, image, stack) - the board lives there, but see the last point,
-  * the 4000 bytes of the first text page (B800:0000..0F9F),
-and nothing else: not the other text pages, not the video ROM above B800, not low memory, not other segments.
-The image may be written at one single address (the opcode byte the shared routine patches); any other store into the
-program's own code is reported."""
+Extra evidence, not one of the six features. The VM maps all 1 MB as RAM, so a program that scribbles outside its own
+memory would still pass the six checks. Random keys, then idle until the stack tops out, then a stretch after game over.
+A store is allowed only inside the program's segment or the first text page (B800:0000..0F9F), and only one byte of the
+program's own code may change (the patched opcode)."""
 
 import argparse
 import os

@@ -1,12 +1,11 @@
 #!/usr/bin/python3
-"""features.py - does this .COM really play Tetris? Six checks, from outside: only the screen and the keyboard.
+"""features.py - does this .COM play Tetris? The six checks of CLAIM, from outside: only the screen and the keyboard.
 
     python3 -I test/features.py <program.com> <adapter> [--pieces N] [--seed N]
 
-Everything is deterministic: same program + same arguments = same verdict, on any machine. See RULES.md, section 3.
-How it works: a tracker follows the falling piece and the settled stack on the screen frame by frame. Whenever a
-piece lands, the board is compared with what the reference rules (test/tetris_model.py) say it must be, including
-removal of full rows. A bot plays pieces to exercise this; scripted scenarios hit the 1-, 2-, 3- and 4-row clears."""
+Deterministic: same program and arguments, same verdict. A tracker follows the falling piece and the settled stack on
+the screen, and each landing is compared with the reference rules (tetris_model.py), full rows included. A bot plays
+pieces, and scripted scenarios hit the 1- to 4-row clears."""
 
 import argparse
 import os
