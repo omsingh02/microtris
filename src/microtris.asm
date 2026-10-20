@@ -1,3 +1,8 @@
+; SPDX-FileCopyrightText: 2026 Om Singh
+; SPDX-License-Identifier: LicenseRef-microtris-asm
+; A derived work of tinytris, which has no licence: read LICENSE and LICENSES/LicenseRef-microtris-asm.txt before
+; reusing this file.
+;
 ; microtris.asm - Tetris in a DOS .COM file, 209 bytes. The smallest complete one I know of is pellsson's tinytris, 247.
 ;
 ; The design is tinytris's (https://github.com/pellsson/tinytris): one word per board row, a piece is a 4x4 bit mask,

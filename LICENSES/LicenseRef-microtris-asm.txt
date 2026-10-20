@@ -1,0 +1,13 @@
+src/microtris.asm (and the build/microtris.com assembled from it)
+
+The program is a derived work. Its architecture and a large part of its instructions come from tinytris by pellsson
+(https://github.com/pellsson/tinytris): 62 of the 104 instruction lines are his, in the same order. tinytris has no
+licence, so its author has granted no rights to it.
+
+What is not taken from tinytris is copyright 2026 Om Singh and is offered under the GNU Affero General Public License,
+version 3 or any later version (LICENSES/AGPL-3.0-or-later.txt).
+
+The two parts cannot be pulled apart inside one 209-byte program, so this file as a whole is NOT offered under any
+licence. It is published for credit, study and verification. Do not redistribute it or the .COM as if it were free
+software. If the author of tinytris grants a licence, or asks for the file to be removed or rewritten, this project
+will follow that.

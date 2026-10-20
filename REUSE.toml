@@ -1,0 +1,9 @@
+version = 1
+SPDX-PackageName = "microtris"
+SPDX-PackageDownloadLocation = "NOASSERTION"
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Om Singh"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

@@ -1,0 +1,12 @@
+microtris is licensed in two parts.
+
+1. Everything except src/microtris.asm (the test harness, the tools, the Makefile, the documents) is copyright 2026
+   Om Singh and licensed under the GNU Affero General Public License, version 3 or any later version.
+   The full text is in LICENSES/AGPL-3.0-or-later.txt.
+
+2. src/microtris.asm, and the .COM built from it, is a derived work of pellsson's tinytris, which carries no licence.
+   Only what is not taken from tinytris is the project owner's. See LICENSES/LicenseRef-microtris-asm.txt for exactly
+   what that means: the file as a whole is not offered under any licence.
+
+The per-file licence is stated in REUSE.toml and in the header of src/microtris.asm (REUSE specification;
+`reuse lint` checks it).
