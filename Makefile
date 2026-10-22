@@ -22,7 +22,7 @@ $(COM): microtris.asm
 	@mkdir -p build
 	$(NASM) -f bin -l build/microtris.lst microtris.asm -o $(COM)
 
-# tinytris has no licence, so it is not kept here: fetched, checked against its sha256, only ever run in the VM
+# tinytris is not kept here: fetched from upstream, checked against its sha256, only ever run in the VM
 $(HOLDER):
 	@mkdir -p build
 	curl -fsSL -o $(HOLDER) $(HOLDER_URL)

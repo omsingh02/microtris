@@ -45,7 +45,8 @@ changed:
 what the tests found in tinytris
 
 It passes all six feature checks. Two other checks found defects (details in test/NOTES); reported to its author at
-https://github.com/pellsson/tinytris/issues/1.
+https://github.com/pellsson/tinytris/issues/1. The reply: bugs are likely and it was not tested much. The issue is
+closed and the defects are not fixed upstream, so `make test` still reproduces both.
 
 1. A vertical I vanishes at the right wall. `l` once too often takes the column shift to 0xff, the CPU masks the
    count, every cell shifts out, and a cell that is not there can never collide. test/fuzz.py (random keys, every
@@ -71,8 +72,8 @@ what this does not claim
 credit and provenance
 
 The design is pellsson's: 62 of the 104 instruction lines in microtris.asm are his, in the same order (difflib over
-the instruction text; comments, labels and directives ignored). tinytris.com is not in this repo, since the upstream
-repo has no licence: make fetches it and checks the sha256.
+the instruction text; comments, labels and directives ignored). tinytris.com is not in this repo: make fetches it
+from upstream and checks the sha256.
 
 This was written with Claude Code (Anthropic's coding assistant). The design choices, the rules and the numbers are
 in the repo; what it claims is checked by `make test`, which does not depend on who wrote what.
@@ -80,6 +81,6 @@ in the repo; what it claims is checked by `make test`, which does not depend on 
 licence
 
 LICENSE has the details. The test directory, the Makefile and the documents are copyright 2026 Om Singh, AGPL-3.0 or
-later. microtris.asm and the .COM are a derived work of tinytris, which has no licence, so that file is published for
-credit and study and is not offered under any licence. If pellsson adds a licence to tinytris, or asks for the parts
-taken from it to go, that is what happens here. STYLE says how the repo is kept.
+later. microtris.asm is a derived work of tinytris, which pellsson released under the Boost Software License 1.0 on
+2026-10-22 after this project asked (the issue above), so microtris.asm is under BSL-1.0 too, with the licence text in
+its header. The .COM is object code built from it. STYLE says how the repo is kept.
